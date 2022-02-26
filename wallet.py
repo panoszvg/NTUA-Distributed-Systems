@@ -14,15 +14,17 @@ from uuid import uuid4
 
 
 
-class wallet:
+class Wallet:
 
-	def __init__():
-		##set
-
-		#self.public_key
-		#self.private_key
+	'''
+	Initialize a Wallet object that belongs to a Node in the network
+	'''
+	def __init__(self):
+		rand_gen = RSA.generate(2048)
+		self.public_key = rand_gen.publickey().export_key().decode() 
+		self.private_key = rand_gen.export_key().decode() 
 		#self_address
-		#self.transactions
+		self.transactions = []
 
-	def balance():
+	# def balance():
 
