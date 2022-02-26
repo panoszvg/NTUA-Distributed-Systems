@@ -1,25 +1,48 @@
+from ipaddress import ip_address
 import block
 import wallet
 
 class node:
-	def __init__():
+
+	'''
+	Initialize a node in the network
+
+	Attributes
+	----------
+	NBC: int
+		the amount of coins this node possesses
+	wallet: Wallet
+		the Wallet object of this node
+	ring: list of dicts
+		here we store information for every node, as its id, its address (ip:port) its public key and its balance 
+
+
+	'''
+	def __init__(self, ip, port):
 		self.NBC=100;
 		##set
 
 		#self.chain
 		#self.current_id_count
 		#self.NBCs
-		#self.wallet
+		self.wallet = self.generate_wallet()
+		self.ip = ip
+		self.port = port
+		self.ring = []
 
-		#slef.ring[]   #here we store information for every node, as its id, its address (ip:port) its public key and its balance 
 
 
 
+	# def create_new_block():
+		
 
-	def.create_new_block():
+	'''
+	Creates a new wallet, including a new pair of private/public key using RSA.
+	Implementation is in constructor of Wallet class in 'wallet.py'
+	'''
+	def generate_wallet():
+		return wallet.Wallet()
 
-	def create_wallet():
-		#create a wallet for this node, with a public key and a private key
 
 	def register_node_to_ring():
 		#add this node to the ring, only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
@@ -36,7 +59,7 @@ class node:
 
 
 
-	def validdate_transaction():
+	def validate_transaction():
 		#use of signature and NBCs balance
 
 
@@ -59,7 +82,7 @@ class node:
 
 
 
-	#concencus functions
+	#concensus functions
 
 	def valid_chain(self, chain):
 		#check for the longer chain accroose all nodes
