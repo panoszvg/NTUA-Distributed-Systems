@@ -38,6 +38,15 @@ def get_transactions():
     return jsonify(response), 200
 
 
+# get blockchain
+
+@app.route('/blockchain', methods=['GET'])
+def get_blockchain():
+    response = {'blockchain': jsonpickle.encode(blockchain.blocks)}
+    print(response)
+    return jsonify(response), 200
+
+
 if __name__ == '__main__':
     from argparse import ArgumentParser
 
