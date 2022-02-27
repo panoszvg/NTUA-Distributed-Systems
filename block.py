@@ -2,7 +2,8 @@
 import json
 import datetime
 from Crypto.Hash import SHA256
-
+from pyparsing import traceParseAction
+from transaction import Transaction
 
 
 
@@ -32,9 +33,9 @@ class Block:
 		))
 		return SHA256.new(block_info.encode()).hexdigest()
 
-	# '''
-	# Add a transaction to the block:
-	# Essentially append it to transactions list
-	# '''
-	# def add_transaction(transaction transaction):
-
+	'''
+	Add a transaction to the block:
+	Essentially append it to transactions list
+	'''
+	def add_transaction(self, transaction):
+		self.transactions.append(transaction)

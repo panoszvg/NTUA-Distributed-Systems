@@ -4,8 +4,8 @@ from flask_cors import CORS
 
 
 import block
-import node
-import blockchain
+from node import Node
+from blockchain import Blockchain
 import wallet
 import transaction
 import wallet
@@ -44,5 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
     args = parser.parse_args()
     port = args.port
+    node = Node('127.0.0.1', port)
+
 
     app.run(host='127.0.0.1', port=port)

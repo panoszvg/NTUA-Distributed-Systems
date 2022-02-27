@@ -15,6 +15,7 @@ import requests
 from flask import Flask, jsonify, request, render_template
 from rsa import sign
 
+from transaction_io import Transaction_Input, Transaction_Output
 
 class Transaction:
 

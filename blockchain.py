@@ -1,3 +1,5 @@
+from block import Block
+
 class Blockchain:
 
     '''
@@ -16,3 +18,10 @@ class Blockchain:
     '''
     def add_block(self, block):
         self.blocks.append(block)
+
+    def get_transactions(self):
+        transactions = []
+        for block in self.blocks:
+            for transaction in block.transactions:
+                transactions.append(transaction)
+        return transactions

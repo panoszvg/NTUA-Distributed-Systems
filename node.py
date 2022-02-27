@@ -1,9 +1,11 @@
 from ipaddress import ip_address
 from block import Block
 from blockchain import Blockchain
+from transaction import Transaction
 from wallet import Wallet
 
 class Node:
+	current_id_count = 0
 
 	'''
 	Initialize a node in the network
@@ -20,15 +22,12 @@ class Node:
 		blockchain that exists in this node
 	id: int
 		number that represents a node (0, ..., n-1)
-	current_id_count: int
-		how many nodes exist - basically size of ring size 
 
 	'''
 	def __init__(self, ip, port):
 		self.NBC = 0 # change to 100*N for bootstrap
 		self.chain = Blockchain()
 		self.id = None
-		self.current_id_count = None
 		#self.NBCs
 		self.wallet = self.generate_wallet()
 		self.ip = ip
@@ -37,15 +36,18 @@ class Node:
 
 
 
-	
-	# def create_new_block():
+	'''
+	Creates a new Block object and returns it
+	'''
+	def create_new_block(self, previous_hash, index):
+		return Block(previous_hash, index)
 		
 
 	'''
 	Creates a new wallet, including a new pair of private/public key using RSA.
 	Implementation is in constructor of Wallet class in 'wallet.py'
 	'''
-	def generate_wallet():
+	def generate_wallet(self):
 		return Wallet()
 
 
@@ -53,13 +55,23 @@ class Node:
 	Add this node to the ring; only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
 	bootstrap node informs all other nodes and gives the request node an id and 100 NBCs
 	'''
-	def register_node_to_ring(self, ip, port, public_key, amount):
+	def register_node_to_ring(self, ip, port, public_key, amount=0):
 		self.ring.append(dict(
 			ip = ip,
 			port = port,
 			public_key = public_key,
 			amount = amount
 		))
+		# transaction = Transaction(self.ip, ip, 100, )
+
+	'''
+	Method to initialize nodes other than bootstrap, it is called after the other Node objects have been
+	created and added to ring variable. This method broadcasts ring to the other nodes and creates initial
+	transactions to give other nodes their first 100 NBC.
+	'''
+	# def initialize_nodes(self):
+		# for node in self.ring:
+		# 	#broadcast ring to node
 
 
 	# def create_transaction(sender, receiver, signature):
