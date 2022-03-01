@@ -32,9 +32,9 @@ class Transaction:
         amount of NBC to be transferred
     transaction_id: str
         hash string of the transaction - using parameters above
-    transaction_inputs: list(str)
+    transaction_inputs: list of Transaction_Input
         list that contains transactions ids as inputs
-    transaction_outputs: list(str)
+    transaction_outputs: list of Transaction_Output
         list that contains UTXOs
     '''
     def __init__(self, sender_address, receiver_address, amount, transaction_inputs):
@@ -57,7 +57,7 @@ class Transaction:
             sender_address = self.sender_address,
             receiver_address = self.receiver_address,
             amount = self.amount,
-            transaction_inputs = self.transaction_inputs
+            transaction_inputs = [item.to_dict() for item in self.transaction_inputs]
         ))
         return SHA256.new(transaction_info.encode())
     
@@ -73,14 +73,14 @@ class Transaction:
         )
         
 
-    """
+    '''
     Sign transaction with private key
 
     Parameters
     ----------
     private_key: str
         the private key of the sender's wallet
-    """
+    '''
     def sign_transaction(self, private_key):
         hash_obj = self.get_hash()
         rsa = RSA.import_key(private_key)
@@ -88,3 +88,18 @@ class Transaction:
         signature = signer.sign(hash_obj)
         self.signature = base64.b64encode(signature)
        
+
+    '''
+    Verify signature of a transaction sent from another node.
+    No need to add the sender wallet's public key, since it exists in 
+    the Transaction object (self.sender_address)
+
+    return: bool
+    '''
+    def verify_signature(self):
+        rsa = RSA.import_key(self.sender_address)
+        verifier = PKCS1_v1_5.new(rsa)
+        signature = self.signature
+        hash_obj = self.get_hash()
+        verified = verifier.verify(hash_obj, base64.b64decode(signature))
+        return verified

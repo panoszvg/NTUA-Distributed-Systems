@@ -10,6 +10,9 @@ class Transaction_Input:
     def __init__(self, previous_output_id):
         self.previous_output_id = previous_output_id
 
+    def to_dict(self):
+        return dict(previous_output_id = self.previous_output_id)
+
     
 class Transaction_Output:
     '''
@@ -19,8 +22,8 @@ class Transaction_Output:
     ----------
     id: str
         id that comes from the transaction it is part of
-    recipient: 
-        the transaction's recipient (new coin owner)
+    recipient: int
+        id of the transaction's recipient (new coin owner)
     amount: int
         the amount transferred
     '''
@@ -28,3 +31,10 @@ class Transaction_Output:
         self.id = transaction_id
         self.recipient = recipient
         self.amount = amount
+
+    def to_dict(self):
+        return dict(
+            id = self.id,
+            recipient = self.recipient,
+            amount = self.recipient
+        )
