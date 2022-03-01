@@ -97,6 +97,7 @@ class Transaction:
     return: bool
     '''
     def verify_signature(self):
+        print(self.sender_address)
         rsa = RSA.import_key(self.sender_address)
         verifier = PKCS1_v1_5.new(rsa)
         signature = self.signature

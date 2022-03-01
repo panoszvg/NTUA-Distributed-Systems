@@ -1,3 +1,4 @@
+import json
 import requests
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
@@ -9,9 +10,8 @@ from blockchain import Blockchain
 import wallet
 import transaction
 import wallet
+import jsonpickle
 
-
-### JUST A BASIC EXAMPLE OF A REST API WITH FLASK
 
 
 
@@ -22,20 +22,33 @@ blockchain = Blockchain()
 
 #.......................................................................................
 
+@app.route('/transaction/receive', methods=['POST'])
+def receive_transaction():
+    test = 0
+    node_data = request.json
+
 
 
 # get all transactions in the blockchain
 
 @app.route('/transactions/get', methods=['GET'])
 def get_transactions():
-    transactions = blockchain.transactions
+    transactions = blockchain.get_transactions()
+    for txn in transactions:
+        txn = txn.to_dict()
+        print()
+        print(txn)
+        print()
+    print(type(transactions))
+    print(type(transactions[0].to_dict()))
 
-    response = {'transactions': transactions}
+    response = {'transactions': jsonpickle.encode(transactions)}
+    print(response)
     return jsonify(response), 200
 
 
 
-# run it once fore every node
+# run it once for every node
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
@@ -45,6 +58,17 @@ if __name__ == '__main__':
     args = parser.parse_args()
     port = args.port
     node = Node('127.0.0.1', port)
-
+    public_key = node.wallet.public_key
+    data = {
+        'ip': '127.0.0.1',
+        'port': port,
+        'public_key': public_key,
+        'amount': node.NBC # 0
+    }
+    req = requests.post('http://localhost:5000/node/register', json=data)
+    if (not req.status_code == 200):
+        print("Problem")
+        exit(1)
+    print(node.NBC)
 
     app.run(host='127.0.0.1', port=port)

@@ -7,6 +7,7 @@ import config
 import block
 from node import Node
 from blockchain import Blockchain
+from transaction_io import Transaction_Output
 import wallet
 from transaction import Transaction
 import wallet
@@ -17,6 +18,20 @@ blockchain = Blockchain()
 
 
 #.......................................................................................
+
+@app.route('/node/register', methods=['POST'])
+def register_node():
+    node_data = request.json
+    node.register_node_to_ring(
+        ip=node_data['ip'],
+        port=node_data['port'],
+        public_key=node_data['public_key'],
+        amount=node_data['amount']
+    )
+    if Node.current_id_count == 2:
+        node.initialize_nodes()
+    
+    return "OK", 200
 
 
 
@@ -63,5 +78,6 @@ if __name__ == '__main__':
     first_txn = Transaction(boostrap_ip, boostrap_ip, 100 * config.nodes, None)
     genesis.add_transaction(first_txn)
     blockchain.add_block(genesis)
+    node.NBCs[0] = Transaction_Output(first_txn.transaction_id, first_txn.receiver_address, first_txn.amount)
 
     app.run(host='127.0.0.1', port=port)
