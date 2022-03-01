@@ -36,5 +36,5 @@ class Transaction_Output:
         return dict(
             id = self.id,
             recipient = self.recipient,
-            amount = self.recipient
+            amount = self.amount
         )
