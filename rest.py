@@ -58,17 +58,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     port = args.port
     node = Node('127.0.0.1', port)
-    public_key = node.wallet.public_key
     data = {
         'ip': '127.0.0.1',
         'port': port,
-        'public_key': public_key,
-        'amount': node.NBC # 0
+        'public_key': node.wallet.public_key,
+        'amount': 0
     }
     req = requests.post('http://localhost:5000/node/register', json=data)
     if (not req.status_code == 200):
         print("Problem")
         exit(1)
-    print(node.NBC)
 
     app.run(host='127.0.0.1', port=port)

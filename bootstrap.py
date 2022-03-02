@@ -75,9 +75,8 @@ if __name__ == '__main__':
     Node.current_id_count += 1
     blockchain = node.chain
     genesis = block.Block(1, 0)
-    first_txn = Transaction(boostrap_ip, boostrap_ip, 100 * config.nodes, None)
+    first_txn = Transaction(node.wallet.public_key, node.wallet.public_key, 100 * config.nodes, [])
     genesis.add_transaction(first_txn)
     blockchain.add_block(genesis)
-    node.NBCs[0] = Transaction_Output(first_txn.transaction_id, first_txn.receiver_address, first_txn.amount)
 
     app.run(host='127.0.0.1', port=port)

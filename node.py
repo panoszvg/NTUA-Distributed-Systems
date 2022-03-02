@@ -14,8 +14,6 @@ class Node:
 
 	Attributes
 	----------
-	NBC: int
-		the amount of coins this node possesses
 	wallet: Wallet
 		the Wallet object of this node
 	ring: list of dict
@@ -28,7 +26,6 @@ class Node:
 		list of UTXOs for each node
 	'''
 	def __init__(self, ip, port):
-		self.NBC = 0 # change to 100*N for bootstrap
 		self.chain = Blockchain()
 		self.id = Node.current_id_count
 		Node.current_id_count += 1
