@@ -22,22 +22,25 @@ blockchain = Blockchain(config.capacity)
 
 #.......................................................................................
 
+'''
+When all nodes are inserted, bootstrap will use this endpoint to broadcast the ring
+'''
 @app.route('/ring/receive', methods=['POST'])
 def receive_ring():
     node.ring = request.json['ring']
-    print(node.ring)
     return "OK", 200
 
-
+'''
+When a transaction is created and broadcasted, it will be received in this endpoint
+'''
 @app.route('/transaction/receive', methods=['POST'])
 def receive_transaction():
     test = 0
     node_data = request.json
 
-
-
-# get all transactions in the blockchain
-
+'''
+Get all transactions that have been added to blockchain
+'''
 @app.route('/transactions/get', methods=['GET'])
 def get_transactions():
     transactions = blockchain.get_transactions()

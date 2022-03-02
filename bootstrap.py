@@ -1,4 +1,3 @@
-from matplotlib.font_manager import json_dump
 import requests
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
@@ -21,6 +20,9 @@ blockchain = Blockchain(config.capacity)
 
 #.......................................................................................
 
+'''
+When a node wants to be registered and get an id, it will use this endpoint
+'''
 @app.route('/node/register', methods=['POST'])
 def register_node():
     node_data = request.json
@@ -30,17 +32,15 @@ def register_node():
         port=node_data['port'],
         public_key=node_data['public_key']
     )
-    print(node.current_id_count)
     if node.current_id_count == config.nodes:
         _thread.start_new_thread(node.initialize_nodes, ())
     
     response = {'id': node.current_id_count - 1}
     return response, 200
 
-
-
-# get all transactions in the blockchain
-
+'''
+Get all transactions that have been added to blockchain
+'''
 @app.route('/transactions/get', methods=['GET'])
 def get_transactions():
     transactions = blockchain.get_transactions()
@@ -56,9 +56,9 @@ def get_transactions():
     print(response)
     return jsonify(response), 200
 
-
-# get blockchain
-
+'''
+Get the entire blockchain
+'''
 @app.route('/blockchain', methods=['GET'])
 def get_blockchain():
     response = {'blockchain': jsonpickle.encode(blockchain.blocks)}

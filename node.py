@@ -33,10 +33,10 @@ class Node:
 	UTXOs: list of list of Transaction_Output
 		list of UTXOs for each node
 	'''
-	def __init__(self, ip, port, current_node_count):
+	def __init__(self, ip, port, id):
 		self.chain = Blockchain(config.capacity)
-		self.id = current_node_count
-		self.current_id_count = current_node_count
+		self.id = id
+		self.current_id_count = id # will be updated in main
 		if self.id == 0:
 			self.UTXOs = []
 		else:
@@ -64,6 +64,13 @@ class Node:
 
 	'''
 	Creates a new Block object and returns it
+
+	Parameters:
+	-----------
+	previous_hash: str
+		hash of the previous block, needed for validation of chain
+	index: int
+		index of current block
 	'''
 	def create_new_block(self, previous_hash, index):
 		return Block(previous_hash, index)
@@ -99,13 +106,10 @@ class Node:
 	def initialize_nodes(self):
 		time.sleep(1) # needed so that final node gets response with id before ring broadcast
 		ring_data = { 'ring': self.ring }
-		print(ring_data)
 		for node in self.ring:
-			print(node['id'])
 			if node['id'] == self.id:
 				continue
 			url = "http://" + node['ip'] + ":" + str(node['port']) + "/ring/receive"
-			print(url)
 			req = requests.post(url, json=ring_data)
 			if (not req.status_code == 200):
 				print("Problem")
@@ -155,8 +159,6 @@ class Node:
 		transaction.transaction_outputs.append(output_recipient)
 		return transaction
 
-		
-
 
 	'''
 	Broadcasts a transaction to other nodes
@@ -166,9 +168,15 @@ class Node:
 			requests.post("http://" + node['ip'] + ":" + node['port'] + "/transaction/receive")
 
 
+	'''
+	Validates a transaction's signature, removes UTXOs that are given as inputs
+	and adds UTXOs that are given as outputs
 
-
-
+	Parameters:
+	-----------
+	transaction: Transaction
+		transaction to be validated
+	'''
 	def validate_transaction(self, transaction):
 		#use of signature and NBCs balance
 		verified = transaction.verify_signature()
@@ -188,7 +196,15 @@ class Node:
 			return
 
 
-
+	'''
+	Adds a transaction to the end of the last block and if the block 
+	is full, starts mining process
+	
+	Parameters:
+	-----------
+	transaction: Transaction
+		transaction to be added to block
+	'''
 	def add_transaction_to_block(self, transaction):
 		#if enough transactions mine
 		self.chain.blocks[-1].add_transaction(transaction)
@@ -196,7 +212,10 @@ class Node:
 			self.mine_block()
 
 
-
+	'''
+	Mines a block: searches for the right nonce, and when it
+	finds it, it adds a timestamp and broadcasts the block to the other nodes
+	'''
 	def mine_block(self):
 		timestamp = None
 		nonce = randint(0, 2^32)
@@ -210,6 +229,16 @@ class Node:
 		self.broadcast_block(nonce, timestamp)
 
 
+	'''
+	Broadcasts a block to the other nodes
+
+	Parameters:
+	-----------
+	nonce: int
+		number than has DIFFICULTY 0s as prefix, if hashed
+	timestamp: timestamp
+		time that nonce was found, provided by mine_block()
+	'''
 	def broadcast_block(self, nonce, timestamp):
 		for node in self.ring:
 			requests.post("http://" + node['ip'] + ":" + node['port'] + "/block/add") # create endpoint in rest
