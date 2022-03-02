@@ -14,7 +14,7 @@ import wallet
 
 app = Flask(__name__)
 CORS(app)
-blockchain = Blockchain()
+blockchain = Blockchain(config.capacity)
 
 
 #.......................................................................................

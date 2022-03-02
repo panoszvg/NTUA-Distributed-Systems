@@ -1,10 +1,15 @@
+import datetime
 from ipaddress import ip_address
+from random import randint
+from Crypto.Hash import SHA256
+from numpy import broadcast
 from block import Block
 from blockchain import Blockchain
 from transaction import Transaction
 from transaction_io import Transaction_Output
 from wallet import Wallet
 import requests
+import config
 
 class Node:
 	current_id_count = 0
@@ -26,7 +31,7 @@ class Node:
 		list of UTXOs for each node
 	'''
 	def __init__(self, ip, port):
-		self.chain = Blockchain()
+		self.chain = Blockchain(config.capacity)
 		self.id = Node.current_id_count
 		Node.current_id_count += 1
 		if self.id == 0:
@@ -170,16 +175,30 @@ class Node:
 
 
 
-	# def add_transaction_to_block():
-	# 	#if enough transactions  mine
+	def add_transaction_to_block(self, transaction):
+		#if enough transactions mine
+		self.chain.blocks[-1].add_transaction(transaction)
+		if len(self.chain.blocks[-1].transcations) == self.chain.capacity:
+			self.mine_block()
 
 
 
-	# def mine_block():
+	def mine_block(self):
+		timestamp = None
+		nonce = randint(0, 2^32)
+		while (True):
+			sha_str = SHA256.new(nonce).hexdigest()
+			if sha_str.startswith('0' * config.difficulty):
+				timestamp = datetime.datetime.now().timestamp()
+				break
+
+			nonce = (nonce + 1) % (2^32)
+		self.broadcast_block(nonce, timestamp)
 
 
-
-	# def broadcast_block():
+	def broadcast_block(self, nonce, timestamp):
+		for node in self.ring:
+			requests.post("http://" + node['ip'] + ":" + node['port'] + "/block/add") # create endpoint in rest
 
 
 		

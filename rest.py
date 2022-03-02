@@ -11,13 +11,13 @@ import wallet
 import transaction
 import wallet
 import jsonpickle
-
+import config
 
 
 
 app = Flask(__name__)
 CORS(app)
-blockchain = Blockchain()
+blockchain = Blockchain(config.capacity)
 
 
 #.......................................................................................

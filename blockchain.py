@@ -10,8 +10,9 @@ class Blockchain:
     blocks: list of Block
         the blocks that this blockchain contains
     '''
-    def __init__(self):
+    def __init__(self, capacity):
         self.blocks = []
+        self.capacity = capacity
 
     '''
     Appends a new block to the list of Block
