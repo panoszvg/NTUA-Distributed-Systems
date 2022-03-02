@@ -22,6 +22,13 @@ blockchain = Blockchain(config.capacity)
 
 #.......................................................................................
 
+@app.route('/ring/receive', methods=['POST'])
+def receive_ring():
+    node.ring = request.json['ring']
+    print(node.ring)
+    return "OK", 200
+
+
 @app.route('/transaction/receive', methods=['POST'])
 def receive_transaction():
     test = 0
@@ -57,16 +64,18 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
     args = parser.parse_args()
     port = args.port
-    node = Node('127.0.0.1', port)
+    node = Node('127.0.0.1', port, 0)
     data = {
         'ip': '127.0.0.1',
         'port': port,
-        'public_key': node.wallet.public_key,
-        'amount': 0
+        'public_key': node.wallet.public_key
     }
     req = requests.post('http://localhost:5000/node/register', json=data)
     if (not req.status_code == 200):
         print("Problem")
         exit(1)
+
+    node.id = json.loads(req.content.decode())['id']
+    node.current_id_count = node.id + 1
 
     app.run(host='127.0.0.1', port=port)

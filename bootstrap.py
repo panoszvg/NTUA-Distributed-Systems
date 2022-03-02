@@ -1,3 +1,4 @@
+from matplotlib.font_manager import json_dump
 import requests
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
@@ -11,10 +12,11 @@ from transaction_io import Transaction_Output
 import wallet
 from transaction import Transaction
 import wallet
+import _thread
 
 app = Flask(__name__)
 CORS(app)
-blockchain = Blockchain(config.capacity)
+blockchain = Blockchain(config.capacity) 
 
 
 #.......................................................................................
@@ -23,15 +25,17 @@ blockchain = Blockchain(config.capacity)
 def register_node():
     node_data = request.json
     node.register_node_to_ring(
+        id=node.current_id_count,
         ip=node_data['ip'],
         port=node_data['port'],
-        public_key=node_data['public_key'],
-        amount=node_data['amount']
+        public_key=node_data['public_key']
     )
-    if Node.current_id_count == 2:
-        node.initialize_nodes()
+    print(node.current_id_count)
+    if node.current_id_count == config.nodes:
+        _thread.start_new_thread(node.initialize_nodes, ())
     
-    return "OK", 200
+    response = {'id': node.current_id_count - 1}
+    return response, 200
 
 
 
@@ -70,9 +74,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     port = args.port
     boostrap_ip = '127.0.0.1'
-    node = Node(boostrap_ip, port)
-    node.id = 0
-    Node.current_id_count += 1
+    node = Node(boostrap_ip, port, 0)
+    node.register_node_to_ring(node.id, node.ip, node.port, node.wallet.public_key)
     blockchain = node.chain
     genesis = block.Block(1, 0)
     first_txn = Transaction(node.wallet.public_key, node.wallet.public_key, 100 * config.nodes, [])

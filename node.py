@@ -1,4 +1,6 @@
 import datetime
+import json
+import time
 from ipaddress import ip_address
 from random import randint
 from Crypto.Hash import SHA256
@@ -12,7 +14,6 @@ import requests
 import config
 
 class Node:
-	current_id_count = 0
 
 	'''
 	Initialize a node in the network
@@ -22,18 +23,20 @@ class Node:
 	wallet: Wallet
 		the Wallet object of this node
 	ring: list of dict
-		here we store information for every node, as its id, its address (ip:port) its public key and its balance 
+		here we store information for every node, as its id, its address (ip:port) its public key (and its balance - will deprecate)
 	chain: Blockchain
 		blockchain that exists in this node
 	id: int
 		number that represents a node (0, ..., n-1)
+	current_id_count: int
+		how many nodes exist - basically size of ring
 	UTXOs: list of list of Transaction_Output
 		list of UTXOs for each node
 	'''
-	def __init__(self, ip, port):
+	def __init__(self, ip, port, current_node_count):
 		self.chain = Blockchain(config.capacity)
-		self.id = Node.current_id_count
-		Node.current_id_count += 1
+		self.id = current_node_count
+		self.current_id_count = current_node_count
 		if self.id == 0:
 			self.UTXOs = []
 		else:
@@ -78,14 +81,14 @@ class Node:
 	Add this node to the ring; only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
 	bootstrap node informs all other nodes and gives the request node an id and 100 NBCs
 	'''
-	def register_node_to_ring(self, id, ip, port, public_key, amount=0):
+	def register_node_to_ring(self, id, ip, port, public_key):
 		self.ring.append(dict(
 			id = id,
 			ip = ip,
 			port = port,
-			public_key = public_key,
-			amount = amount
+			public_key = public_key
 		))
+		self.current_id_count += 1
 		self.UTXOs.append([])
 
 	'''
@@ -94,8 +97,19 @@ class Node:
 	transactions to give other nodes their first 100 NBC.
 	'''
 	def initialize_nodes(self):
+		time.sleep(1) # needed so that final node gets response with id before ring broadcast
+		ring_data = { 'ring': self.ring }
+		print(ring_data)
 		for node in self.ring:
-			requests.post("http://" + node['ip'] + ":" + node['port'])
+			print(node['id'])
+			if node['id'] == self.id:
+				continue
+			url = "http://" + node['ip'] + ":" + str(node['port']) + "/ring/receive"
+			print(url)
+			req = requests.post(url, json=ring_data)
+			if (not req.status_code == 200):
+				print("Problem")
+				exit(1)
 
 
 	'''
