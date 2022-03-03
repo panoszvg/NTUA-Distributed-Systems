@@ -3,6 +3,7 @@ from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 import jsonpickle
 
+from cli import client
 import config
 import block
 from node import Node
@@ -12,6 +13,7 @@ import wallet
 from transaction import Transaction
 import wallet
 import _thread
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -19,6 +21,27 @@ blockchain = Blockchain(config.capacity)
 
 
 #.......................................................................................
+
+def client():
+    time.sleep(3) # give enough time for nodes to be initialized
+    print("\n        NBC Client        \n")
+    while(True):
+        cli_input = input()
+        if cli_input[0:2] == "t ":
+            print("New transaction requested")
+        elif cli_input == "view":
+            print("View requested")
+        elif cli_input == "balance":
+            print("Balance requested")
+        else:
+            if cli_input != "help":
+                print("Command not recognized")
+            print("\nAvailable Commands:")
+            print("t <recipient_address> <amount>: Create new transaction.")
+            print("view:                           View transactions in last block.")
+            print("balance:                        Show balance of wallet.")
+            print("help:                           Show available commands.\n\n")
+
 
 '''
 When a node wants to be registered and get an id, it will use this endpoint
@@ -34,6 +57,7 @@ def register_node():
     )
     if node.current_id_count == config.nodes:
         _thread.start_new_thread(node.initialize_nodes, ())
+        _thread.start_new_thread(client, ())
     
     response = {'id': node.current_id_count - 1}
     return response, 200

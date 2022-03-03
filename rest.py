@@ -5,6 +5,7 @@ from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 
 
+from cli import client
 import block
 from node import Node
 from blockchain import Blockchain
@@ -13,7 +14,8 @@ import transaction
 import wallet
 import jsonpickle
 import config
-
+import _thread
+import time
 
 
 app = Flask(__name__)
@@ -23,12 +25,33 @@ blockchain = Blockchain(config.capacity)
 
 #.......................................................................................
 
+def client():
+    time.sleep(3) # give enough time for nodes to be initialized
+    print("\n        NBC Client        \n")
+    while(True):
+        cli_input = input()
+        if cli_input[0:2] == "t ":
+            print("New transaction requested")
+        elif cli_input == "view":
+            print("View requested")
+        elif cli_input == "balance":
+            print("Balance requested")
+        else:
+            if cli_input != "help":
+                print("Command not recognized")
+            print("\nAvailable Commands:")
+            print("t <recipient_address> <amount>: Create new transaction.")
+            print("view:                           View transactions in last block.")
+            print("balance:                        Show balance of wallet.")
+            print("help:                           Show available commands.\n\n")
+
 '''
 When all nodes are inserted, bootstrap will use this endpoint to broadcast the ring
 '''
 @app.route('/ring/receive', methods=['POST'])
 def receive_ring():
     node.ring = request.json['ring']
+    _thread.start_new_thread(client, ())
     return "OK", 200
 
 
