@@ -48,8 +48,12 @@ When a transaction is created and broadcasted, it will be received in this endpo
 '''
 @app.route('/transaction/receive', methods=['POST'])
 def receive_transaction():
-    test = 0
-    node_data = request.json
+    transaction = request.json['transaction']
+    valid_transaction = node.validate_transaction(transaction)
+    if valid_transaction:
+        node.add_transaction_to_block(transaction)
+    return "OK", 200
+
 
 '''
 Get all transactions that have been added to blockchain

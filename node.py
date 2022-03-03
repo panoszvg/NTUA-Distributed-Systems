@@ -13,6 +13,7 @@ from transaction_io import Transaction_Output
 from wallet import Wallet
 import requests
 import config
+import _thread
 
 class Node:
 
@@ -163,10 +164,18 @@ class Node:
 
 	'''
 	Broadcasts a transaction to other nodes
+
+	Parameters:
+	-----------
+	transaction: Transaction
+		transaction to be broadcasted
 	'''
-	def broadcast_transaction(self):
+	def broadcast_transaction(self, transaction):
+		json = { 'transaction': jsonpickle.encode(transaction) }
 		for node in self.ring:
-			requests.post("http://" + node['ip'] + ":" + node['port'] + "/transaction/receive")
+			if node['id'] == self.id:
+				continue
+			requests.post("http://" + node['ip'] + ":" + node['port'] + "/transaction/receive", json=json)
 
 
 	'''
@@ -181,6 +190,7 @@ class Node:
 	def validate_transaction(self, transaction):
 		#use of signature and NBCs balance
 		verified = transaction.verify_signature()
+		############## also check for sufficient balance
 		if verified:
 			# find id of sender
 			sender_id = next(item for item in self.ring if item["public_key"] == transaction.sender_address)['id'] # max n iterations
@@ -192,9 +202,10 @@ class Node:
 			for output in transaction.transaction_outputs:
 				node_id = output.recipient
 				self.UTXOs[node_id].append(output)
+			return True
 		else:
 			print("Error")
-			return
+			return False
 
 
 	'''
@@ -210,8 +221,8 @@ class Node:
 		#if enough transactions mine
 		self.chain.blocks[-1].add_transaction(transaction)
 		if len(self.chain.blocks[-1].transcations) == self.chain.capacity:
-			self.mine_block()
-
+			_thread.start_new_thread(self.mine_block, ())
+		return
 
 	'''
 	Mines a block: searches for the right nonce, and when it
@@ -243,6 +254,8 @@ class Node:
 	'''
 	def broadcast_block(self, block):
 		for node in self.ring:
+			if node['id'] == self.id:
+				continue
 			requests.post("http://" + node['ip'] + ":" + node['port'] + "/block/add", json={ 'block' : jsonpickle.encode(block) }) # create endpoint in rest
 
 
