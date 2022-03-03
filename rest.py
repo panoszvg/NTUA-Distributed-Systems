@@ -5,7 +5,6 @@ from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 
 
-from cli import client
 import block
 from node import Node
 from blockchain import Blockchain
@@ -26,7 +25,7 @@ blockchain = Blockchain(config.capacity)
 #.......................................................................................
 
 def client():
-    time.sleep(3) # give enough time for nodes to be initialized
+    time.sleep(2) # give enough time for nodes to be initialized
     print("\n        NBC Client        \n")
     while(True):
         cli_input = input()
@@ -34,8 +33,13 @@ def client():
             print("New transaction requested")
         elif cli_input == "view":
             print("View requested")
+            transactions = node.view_transactions()
+            print(transactions)
+            print()
         elif cli_input == "balance":
             print("Balance requested")
+            print("Wallet has " + str(node.get_wallet_balance(node.id)) + " NBC")
+            print()
         else:
             if cli_input != "help":
                 print("Command not recognized")
@@ -48,9 +52,11 @@ def client():
 '''
 When all nodes are inserted, bootstrap will use this endpoint to broadcast the ring
 '''
-@app.route('/ring/receive', methods=['POST'])
+@app.route('/node/initialize', methods=['POST'])
 def receive_ring():
     node.ring = request.json['ring']
+    node.chain = jsonpickle.decode(request.json['chain']) # validate before adding
+    node.UTXOs = jsonpickle.decode(request.json['UTXOs'])
     _thread.start_new_thread(client, ())
     return "OK", 200
 
@@ -72,9 +78,20 @@ When a transaction is created and broadcasted, it will be received in this endpo
 @app.route('/transaction/receive', methods=['POST'])
 def receive_transaction():
     transaction = request.json['transaction']
+    transaction = jsonpickle.decode(transaction)
+    # print("UTXOs so far:")
+    # for user in node.UTXOs:
+    #     for utxo in user:
+    #         print(utxo.to_dict())
+    # print("\n\n\n")
     valid_transaction = node.validate_transaction(transaction)
     if valid_transaction:
         node.add_transaction_to_block(transaction)
+    # print("UTXOs after transaction:")
+    # for user in node.UTXOs:
+    #     for utxo in user:
+    #         print(utxo.to_dict())
+    # print("\n\n\n")
     return "OK", 200
 
 

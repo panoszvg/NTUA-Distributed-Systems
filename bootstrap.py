@@ -3,7 +3,6 @@ from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 import jsonpickle
 
-from cli import client
 import config
 import block
 from node import Node
@@ -23,7 +22,7 @@ blockchain = Blockchain(config.capacity)
 #.......................................................................................
 
 def client():
-    time.sleep(3) # give enough time for nodes to be initialized
+    time.sleep(2) # give enough time for nodes to be initialized
     print("\n        NBC Client        \n")
     while(True):
         cli_input = input()
@@ -31,8 +30,13 @@ def client():
             print("New transaction requested")
         elif cli_input == "view":
             print("View requested")
+            transactions = node.view_transactions()
+            print(transactions)
+            print()
         elif cli_input == "balance":
             print("Balance requested")
+            print("Wallet has " + str(node.get_wallet_balance(node.id)) + " NBC")
+            print()
         else:
             if cli_input != "help":
                 print("Command not recognized")
@@ -103,6 +107,8 @@ if __name__ == '__main__':
     blockchain = node.chain
     genesis = block.Block(1, 0)
     first_txn = Transaction(node.wallet.public_key, node.wallet.public_key, 100 * config.nodes, [])
+    first_txn_output = Transaction_Output(first_txn.transaction_id, 0, first_txn.amount)
+    node.UTXOs[0].append(first_txn_output)
     genesis.add_transaction(first_txn)
     blockchain.add_block(genesis)
 

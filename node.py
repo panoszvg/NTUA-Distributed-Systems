@@ -1,5 +1,6 @@
 import datetime
 import json
+from socketserver import ThreadingUnixDatagramServer
 import time
 from ipaddress import ip_address
 from random import randint
@@ -9,7 +10,7 @@ from numpy import broadcast
 from block import Block
 from blockchain import Blockchain
 from transaction import Transaction
-from transaction_io import Transaction_Output
+from transaction_io import Transaction_Input, Transaction_Output
 from wallet import Wallet
 import requests
 import config
@@ -39,10 +40,7 @@ class Node:
 		self.chain = Blockchain(config.capacity)
 		self.id = id
 		self.current_id_count = id # will be updated in main
-		if self.id == 0:
-			self.UTXOs = []
-		else:
-			self.UTXOs = [[]]
+		self.UTXOs = []
 		self.wallet = self.generate_wallet()
 		self.ip = ip
 		self.port = port
@@ -63,6 +61,42 @@ class Node:
 			sum += utxo.amount
 		return sum
 
+	'''
+	Get transactions that exist in the last block
+	'''
+	def view_transactions(self):
+		transactions_obj = self.chain.blocks[-1].transactions
+		transactions = []
+		for transaction in transactions_obj:
+			transactions.append(transaction.to_dict())
+		return transactions
+
+	'''
+	Get list of Transaction_Input that is needed for a transaction
+
+	Parameters:
+	-----------
+	amount: int
+		the amount of NBC requested to be found in UTXOs
+	
+	return: list of Transaction_Input | None
+		if there are enough funds for the transaction, will return list of 
+		Transaction_Input, otherwise will return None
+	'''
+	def get_transaction_inputs(self, amount):
+		balance = self.get_wallet_balance(self.id)
+		if balance >= amount:
+			sum = 0
+			inputs = [] # list of Transaction_Input to be used
+			for transaction in self.UTXOs[self.id]:
+				sum += transaction.amount
+				print("Added Transaction_Input with id = " + transaction.id)
+				inputs.append(Transaction_Input(transaction.id))
+				if sum >= amount:
+					return inputs
+		else:
+			print("Problem")
+			return None
 
 	'''
 	Creates a new Block object and returns it
@@ -107,15 +141,31 @@ class Node:
 	'''
 	def initialize_nodes(self):
 		time.sleep(1) # needed so that final node gets response with id before ring broadcast
-		ring_data = { 'ring': self.ring }
+		data = { 'ring': self.ring, 'chain': jsonpickle.encode(self.chain), 'UTXOs': jsonpickle.encode(self.UTXOs) }
+
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
-			url = "http://" + node['ip'] + ":" + str(node['port']) + "/ring/receive"
-			req = requests.post(url, json=ring_data)
+			url = "http://" + node['ip'] + ":" + str(node['port']) + "/node/initialize"
+			req = requests.post(url, json=data)
 			if (not req.status_code == 200):
 				print("Problem")
 				exit(1)
+
+		for node in self.ring:
+			if node['id'] == self.id:
+				continue
+			transaction = self.create_transaction(
+				sender_id=self.ring[self.id]['ip'],
+				sender_port=self.ring[self.id]['port'],
+				receiver_ip=node['ip'],
+				receiver_port=node['port'],
+				signature=self.wallet.private_key,
+				amount=100,
+				inputs=self.get_transaction_inputs(100) # no need to check if it returns None, it's always correct
+			)
+			self.validate_transaction(transaction) # otherwise do manually
+			self.broadcast_transaction(transaction)
 
 
 	'''
@@ -135,14 +185,15 @@ class Node:
 	inputs: list of Transaction_Input
 		list that contains previous UTXO ids
 	'''
-	def create_transaction(self, sender, receiver, signature, amount, inputs):
+	def create_transaction(self, sender_id, sender_port, receiver_ip, receiver_port, signature, amount, inputs):
 		# finder sender's id and balance and make sure it's sufficient
-		sender_id = next(item for item in self.ring if item["ip"] == sender)['id'] # max n iterations
+		sender_id = next(item for item in self.ring if item["ip"] == sender_id and item["port"] == sender_port)['id'] # max n iterations
 		sender_wallet_NBCs = self.get_wallet_balance(sender_id)
 		if sender_wallet_NBCs < amount:
 			print("Error: insufficent balance")
 			return
-		recipient_id = next(item for item in self.ring if item["ip"] == receiver)['id'] # max n iterations
+		recipient_id = next(item for item in self.ring if item["ip"] == receiver_ip and item["port"] == receiver_port)['id'] # max n iterations
+		print("Choose recipient_id = " + str(recipient_id))
 
 		transaction = Transaction(self.ring[sender_id]['public_key'], self.ring[recipient_id]['public_key'], amount, inputs)
 		transaction.sign_transaction(signature)
@@ -159,6 +210,7 @@ class Node:
 			amount=amount
 		)
 		transaction.transaction_outputs.append(output_recipient)
+		self.add_transaction_to_block(transaction)
 		return transaction
 
 
@@ -175,7 +227,7 @@ class Node:
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
-			requests.post("http://" + node['ip'] + ":" + node['port'] + "/transaction/receive", json=json)
+			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/transaction/receive", json=json)
 
 
 	'''
@@ -189,6 +241,17 @@ class Node:
 	'''
 	def validate_transaction(self, transaction):
 		#use of signature and NBCs balance
+		# print("Transaction to be validated:")
+		# print(transaction.to_dict())
+		# print()
+		# print("Transaction Inputs to be validated:")
+		# for input in transaction.transaction_inputs:
+		# 	print(input.to_dict())
+		# print()
+		# print("Transaction Outputs to be validated:")
+		# for input in transaction.transaction_outputs:
+		# 	print(input.to_dict())
+		# print("\n\n")
 		verified = transaction.verify_signature()
 		############## also check for sufficient balance
 		if verified:
@@ -220,7 +283,7 @@ class Node:
 	def add_transaction_to_block(self, transaction):
 		#if enough transactions mine
 		self.chain.blocks[-1].add_transaction(transaction)
-		if len(self.chain.blocks[-1].transcations) == self.chain.capacity:
+		if len(self.chain.blocks[-1].transactions) == self.chain.capacity:
 			_thread.start_new_thread(self.mine_block, ())
 		return
 
