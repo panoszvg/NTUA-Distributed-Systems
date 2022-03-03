@@ -1,4 +1,5 @@
 import json
+from re import L
 import requests
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
@@ -29,6 +30,18 @@ When all nodes are inserted, bootstrap will use this endpoint to broadcast the r
 def receive_ring():
     node.ring = request.json['ring']
     return "OK", 200
+
+
+@app.route('/block/add', methods=['POST'])
+def add_block():
+    block_received = jsonpickle.decode(request.json['block'])
+    correct_block = node.validate_block(block_received)
+    if correct_block:
+        node.chain.blocks[-1] = block_received
+    else:
+        print("Problem: must validate chain")
+    return "OK", 200
+
 
 '''
 When a transaction is created and broadcasted, it will be received in this endpoint

@@ -4,6 +4,7 @@ import time
 from ipaddress import ip_address
 from random import randint
 from Crypto.Hash import SHA256
+import jsonpickle
 from numpy import broadcast
 from block import Block
 from blockchain import Blockchain
@@ -217,16 +218,19 @@ class Node:
 	finds it, it adds a timestamp and broadcasts the block to the other nodes
 	'''
 	def mine_block(self):
-		timestamp = None
 		nonce = randint(0, 2^32)
 		while (True):
 			sha_str = SHA256.new(nonce).hexdigest()
 			if sha_str.startswith('0' * config.difficulty):
-				timestamp = datetime.datetime.now().timestamp()
 				break
 
 			nonce = (nonce + 1) % (2^32)
-		self.broadcast_block(nonce, timestamp)
+
+		block = self.chain.blocks[-1]
+		block.nonce = nonce
+		block.current_hash = block.myHash()
+
+		self.broadcast_block(block)
 
 
 	'''
@@ -234,21 +238,29 @@ class Node:
 
 	Parameters:
 	-----------
-	nonce: int
-		number than has DIFFICULTY 0s as prefix, if hashed
-	timestamp: timestamp
-		time that nonce was found, provided by mine_block()
+	block: Block
+		the block with nonce and current_hash defined
 	'''
-	def broadcast_block(self, nonce, timestamp):
+	def broadcast_block(self, block):
 		for node in self.ring:
-			requests.post("http://" + node['ip'] + ":" + node['port'] + "/block/add") # create endpoint in rest
+			requests.post("http://" + node['ip'] + ":" + node['port'] + "/block/add", json={ 'block' : jsonpickle.encode(block) }) # create endpoint in rest
 
 
 		
+	'''
+	Validate the current and previous hash of block received by another node
 
-	# def valid_proof(.., difficulty=MINING_DIFFICULTY):
-
-
+	Parameters:
+	-----------
+	block: Block
+		the block received
+	difficulty: int
+		how many 0s the hash must have as a prefix
+	'''
+	def validate_block(self, block, difficulty=config.difficulty):
+		if block.previous_hash == self.chain.blocks[-1].current_hash and block.nonce[0:difficulty] == "0" * difficulty:
+			return True
+		return False
 
 
 	# #concensus functions
