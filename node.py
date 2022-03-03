@@ -97,7 +97,6 @@ class Node:
 				if sum >= amount:
 					return inputs
 		else:
-			print("Problem")
 			return None
 
 	'''

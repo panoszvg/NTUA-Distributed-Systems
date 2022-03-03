@@ -28,6 +28,54 @@ def client():
         cli_input = input()
         if cli_input[0:2] == "t ":
             print("New transaction requested")
+
+            # split string to arguments
+            cli_input = cli_input[2:].split()
+            if len(cli_input) != 2:
+                print("Arguments given must be 2: <recipient_address> <amount>\n")
+                continue
+
+            # validate first argument
+            recipient_address = cli_input[0]
+            flag = False
+            for n in node.ring:
+                if n['id'] == node.id: # skip self
+                    continue
+                if n['ip'] + ":" + str(n['port']) == recipient_address:
+                    flag = True
+            if not flag:
+                print("'" + recipient_address + "' is not valid address.\n")
+                continue
+            
+            # validate second argument
+            try:
+                int(cli_input[1])
+            except:
+                print("'" + cli_input + " can't be converted to an integer.")
+                continue
+            amount = int(cli_input[1])
+
+            # validate amount
+            inputs = node.get_transaction_inputs(amount)
+            if inputs == None:
+                print("Wallet doesn't have sufficient funds to make this transaction")
+                print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
+                print()
+                continue
+
+            # create transaction
+            new_transaction = node.create_transaction(
+                sender_ip=node.ip,
+                sender_port=node.port,
+                receiver_ip=recipient_address.split(":")[0],
+                receiver_port=int(recipient_address.split(":")[1]),
+                amount=amount,
+                signature=node.wallet.private_key,
+                inputs=inputs
+            )
+            node.validate_transaction(new_transaction)
+            node.broadcast_transaction(new_transaction)
+
         elif cli_input == "view":
             print("View requested")
             transactions = node.view_transactions()
@@ -35,7 +83,7 @@ def client():
             print()
         elif cli_input == "balance":
             print("Balance requested")
-            print("Wallet has " + str(node.get_wallet_balance(node.id)) + " NBC")
+            print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
             print()
         else:
             if cli_input != "help":
