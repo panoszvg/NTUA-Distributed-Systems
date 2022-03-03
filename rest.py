@@ -1,5 +1,4 @@
 import json
-from re import L
 import requests
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
@@ -55,7 +54,12 @@ When all nodes are inserted, bootstrap will use this endpoint to broadcast the r
 @app.route('/node/initialize', methods=['POST'])
 def receive_ring():
     node.ring = request.json['ring']
-    node.chain = jsonpickle.decode(request.json['chain']) # validate before adding
+    valid_chain = node.validate_chain(jsonpickle.decode(request.json['chain']))
+    if valid_chain: 
+        node.chain = jsonpickle.decode(request.json['chain']) # validate before adding
+    else:
+        print("Problem")
+        # exit?
     node.UTXOs = jsonpickle.decode(request.json['UTXOs'])
     _thread.start_new_thread(client, ())
     return "OK", 200

@@ -1,8 +1,5 @@
-import datetime
 import json
-from socketserver import ThreadingUnixDatagramServer
 import time
-from ipaddress import ip_address
 from random import randint
 from Crypto.Hash import SHA256
 import jsonpickle
@@ -54,6 +51,9 @@ class Node:
 	-----------
 	id: int
 		the id of the node in order to search UTXOs (list of list of Transaction_Output)
+
+	return: int
+		the amount of NBC in a node
 	'''
 	def get_wallet_balance(self, id):
 		sum = 0
@@ -63,6 +63,8 @@ class Node:
 
 	'''
 	Get transactions that exist in the last block
+
+	return: list of Transaction
 	'''
 	def view_transactions(self):
 		transactions_obj = self.chain.blocks[-1].transactions
@@ -107,6 +109,8 @@ class Node:
 		hash of the previous block, needed for validation of chain
 	index: int
 		index of current block
+
+	return: Block
 	'''
 	def create_new_block(self, previous_hash, index):
 		return Block(previous_hash, index)
@@ -115,6 +119,8 @@ class Node:
 	'''
 	Creates a new wallet, including a new pair of private/public key using RSA.
 	Implementation is in constructor of Wallet class in 'wallet.py'
+
+	return: Wallet
 	'''
 	def generate_wallet(self):
 		return Wallet()
@@ -123,6 +129,8 @@ class Node:
 	'''
 	Add this node to the ring; only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
 	bootstrap node informs all other nodes and gives the request node an id and 100 NBCs
+
+	return: None
 	'''
 	def register_node_to_ring(self, id, ip, port, public_key):
 		self.ring.append(dict(
@@ -138,6 +146,8 @@ class Node:
 	Method to initialize nodes other than bootstrap, it is called after the other Node objects have been
 	created and added to ring variable. This method broadcasts ring to the other nodes and creates initial
 	transactions to give other nodes their first 100 NBC.
+
+	return: Node
 	'''
 	def initialize_nodes(self):
 		time.sleep(1) # needed so that final node gets response with id before ring broadcast
@@ -156,7 +166,7 @@ class Node:
 			if node['id'] == self.id:
 				continue
 			transaction = self.create_transaction(
-				sender_id=self.ring[self.id]['ip'],
+				sender_ip=self.ring[self.id]['ip'],
 				sender_port=self.ring[self.id]['port'],
 				receiver_ip=node['ip'],
 				receiver_port=node['port'],
@@ -174,20 +184,26 @@ class Node:
 
 	Parameters:
 	-----------
-	sender: str
+	sender_ip: str
 		IP of the node that sends NBC
-	receiver: str
+	sender_port: int
+		Port of the node that sends NBC
+	receiver_ip: str
 		IP of the node that receives NBC
+	receiver_port: int
+		Port of the node that receives NBC
 	signature: str
 		private key of the sender
 	amount: int
 		the amount of NBC to be sent
 	inputs: list of Transaction_Input
 		list that contains previous UTXO ids
+
+	return: Transaction
 	'''
-	def create_transaction(self, sender_id, sender_port, receiver_ip, receiver_port, signature, amount, inputs):
+	def create_transaction(self, sender_ip, sender_port, receiver_ip, receiver_port, signature, amount, inputs):
 		# finder sender's id and balance and make sure it's sufficient
-		sender_id = next(item for item in self.ring if item["ip"] == sender_id and item["port"] == sender_port)['id'] # max n iterations
+		sender_id = next(item for item in self.ring if item["ip"] == sender_ip and item["port"] == sender_port)['id'] # max n iterations
 		sender_wallet_NBCs = self.get_wallet_balance(sender_id)
 		if sender_wallet_NBCs < amount:
 			print("Error: insufficent balance")
@@ -221,6 +237,8 @@ class Node:
 	-----------
 	transaction: Transaction
 		transaction to be broadcasted
+
+	return: None
 	'''
 	def broadcast_transaction(self, transaction):
 		json = { 'transaction': jsonpickle.encode(transaction) }
@@ -238,6 +256,9 @@ class Node:
 	-----------
 	transaction: Transaction
 		transaction to be validated
+
+	return: bool
+		whether transaction is valid or not
 	'''
 	def validate_transaction(self, transaction):
 		#use of signature and NBCs balance
@@ -279,6 +300,8 @@ class Node:
 	-----------
 	transaction: Transaction
 		transaction to be added to block
+
+	return None
 	'''
 	def add_transaction_to_block(self, transaction):
 		#if enough transactions mine
@@ -289,7 +312,9 @@ class Node:
 
 	'''
 	Mines a block: searches for the right nonce, and when it
-	finds it, it adds a timestamp and broadcasts the block to the other nodes
+	finds it and broadcasts the block to the other nodes
+
+	return: None
 	'''
 	def mine_block(self):
 		nonce = randint(0, 2^32)
@@ -314,6 +339,8 @@ class Node:
 	-----------
 	block: Block
 		the block with nonce and current_hash defined
+
+	return: None
 	'''
 	def broadcast_block(self, block):
 		for node in self.ring:
@@ -332,6 +359,9 @@ class Node:
 		the block received
 	difficulty: int
 		how many 0s the hash must have as a prefix
+
+	return: bool
+		whether block is valid or not
 	'''
 	def validate_block(self, block, difficulty=config.difficulty):
 		if block.previous_hash == self.chain.blocks[-1].current_hash and block.nonce[0:difficulty] == "0" * difficulty:
@@ -341,8 +371,24 @@ class Node:
 
 	# #concensus functions
 
-	# def valid_chain(self, chain):
-	# 	#check for the longer chain accroose all nodes
+	'''
+	Validate the blockchain received, basically call validate_block() for every block except genesis
+
+	Parameters: 
+	-----------
+	chain: Blockchain
+		blockchain received that needs to be validated
+
+	return: bool
+		whether blockchain received is valid or not
+	'''
+	def validate_chain(self, chain):
+		for block in chain.blocks:
+			if block.index != 0: # not genesis
+				valid_block = self.validate_block(block)
+				if not valid_block:
+					return False
+		return True
 
 
 	# def resolve_conflicts(self):

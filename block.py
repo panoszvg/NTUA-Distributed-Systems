@@ -1,6 +1,5 @@
 
 import json
-import datetime
 from Crypto.Hash import SHA256
 from pyparsing import traceParseAction
 from transaction import Transaction
@@ -13,7 +12,6 @@ class Block:
 	'''
 	def __init__(self, previous_hash, index):
 		self.index = index
-		self.timestamp = datetime.datetime.now().timestamp()
 		self.transactions = []
 		self.nonce = 0
 		self.current_hash = None # will change after it's hashed
@@ -26,7 +24,6 @@ class Block:
 	def myHash(self):
 		block_info = json.dumps(dict(
 			index = self.index,
-			timestamp = self.timestamp,
 			transactions = self.transactions, # might need to unpack this
 			nonce = self.nonce,
 			previous_hash = self.previous_hash
