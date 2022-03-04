@@ -114,6 +114,30 @@ def register_node():
     response = {'id': node.current_id_count - 1}
     return response, 200
 
+@app.route('/block/add', methods=['POST'])
+def add_block():
+    node.block_received = True
+    block_received = jsonpickle.decode(request.json['block'])
+    correct_block = node.validate_block(block_received)
+    if correct_block:
+        node.chain.blocks[-1] = block_received
+    else:
+        print("Problem: must validate chain")
+        _thread.start_new_thread(node.validate_chain, ())
+    return "OK", 200
+
+'''
+When a transaction is created and broadcasted, it will be received in this endpoint
+'''
+@app.route('/transaction/receive', methods=['POST'])
+def receive_transaction():
+    transaction = request.json['transaction']
+    transaction = jsonpickle.decode(transaction)
+    valid_transaction = node.validate_transaction(transaction)
+    if valid_transaction:
+        node.add_transaction_to_block(transaction)
+    return "OK", 200
+
 '''
 Get all transactions that have been added to blockchain
 '''
@@ -132,14 +156,13 @@ def get_transactions():
     print(response)
     return jsonify(response), 200
 
-'''
-Get the entire blockchain
-'''
-@app.route('/blockchain', methods=['GET'])
-def get_blockchain():
-    response = {'blockchain': jsonpickle.encode(blockchain.blocks)}
+
+@app.route('/chain/get', methods=['GET'])
+def get_chain():
+    response = {'chain': jsonpickle.encode(node.chain), 'UTXO': jsonpickle.encode(node.UTXOs)}
+    print("Sending: ")
     print(response)
-    return jsonify(response), 200
+    return jsonify(response)
 
 
 if __name__ == '__main__':

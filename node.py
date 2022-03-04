@@ -42,6 +42,7 @@ class Node:
 		self.ip = ip
 		self.port = port
 		self.ring = []
+		self.block_received = False
 
 	'''
 	Get balance of a wallet in a node by adding its UTXOs
@@ -316,17 +317,25 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
+		print("\n\n\nMining...\n\n\n")
 		nonce = randint(0, 2^32)
 		while (True):
-			sha_str = SHA256.new(nonce).hexdigest()
-			if sha_str.startswith('0' * config.difficulty):
+			if self.block_received:
+				self.block_received = False
+				return # stop mining
+			sha_str = SHA256.new(json.dumps(nonce).encode()).hexdigest()
+			print(sha_str)
+			print("\n")
+			if sha_str.startswith('5'):
 				break
 
 			nonce = (nonce + 1) % (2^32)
 
+		print("Finished\n\n")
 		block = self.chain.blocks[-1]
 		block.nonce = nonce
 		block.current_hash = block.myHash()
+		self.chain.blocks.append(Block(block.current_hash, block.index + 1))
 
 		self.broadcast_block(block)
 
@@ -345,7 +354,7 @@ class Node:
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
-			requests.post("http://" + node['ip'] + ":" + node['port'] + "/block/add", json={ 'block' : jsonpickle.encode(block) }) # create endpoint in rest
+			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(block) }) # create endpoint in rest
 
 
 		
@@ -363,7 +372,7 @@ class Node:
 		whether block is valid or not
 	'''
 	def validate_block(self, block, difficulty=config.difficulty):
-		if block.previous_hash == self.chain.blocks[-1].current_hash and block.nonce[0:difficulty] == "0" * difficulty:
+		if block.previous_hash == self.chain.blocks[-1].current_hash and block.nonce[0] == '5':
 			return True
 		return False
 
@@ -390,8 +399,26 @@ class Node:
 		return True
 
 
-	# def resolve_conflicts(self):
-	# 	#resolve correct chain
-
-
-
+	def resolve_conflicts(self):
+		#resolve correct chain
+		max_len = 0
+		max_info = None
+		for node in self.ring:
+			if node['id'] == self.id:
+				continue
+			url = url = "http://" + node['ip'] + ":" + str(node['port']) + "/chain/get"
+			req = requests.get(url)
+			if (not req.status_code == 200):
+				print("Status code not 200")
+				exit(1)
+			print(req)
+			print(req.json())
+			print(jsonpickle.decode(req.json()['chain']))
+			print(jsonpickle.decode(req.json()['chain']).blocks)
+			print(len(jsonpickle.decode(req.json()['chain']).blocks))
+			if len(jsonpickle.decode(req.json()['chain']).blocks) > max_len:
+				max_len = len(req.json()['chain'])
+				max_info = req.json()
+		
+		self.chain = jsonpickle.decode(max_info['chain'])
+		self.UTXOs = jsonpickle.decode(max_info['UTXO'])

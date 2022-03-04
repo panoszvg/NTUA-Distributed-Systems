@@ -67,8 +67,8 @@ class Transaction:
             receiver_address = self.receiver_address,
             amount = self.amount,
             transaction_id = self.transaction_id,
-            transaction_inputs = self.transaction_inputs,
-            transaction_outputs = self.transaction_outputs,
+            transaction_inputs = [item.to_dict() for item in self.transaction_inputs],
+            transaction_outputs = [item.to_dict() for item in self.transaction_outputs],
             signature = self.signature
         )
         
@@ -86,7 +86,7 @@ class Transaction:
         rsa = RSA.import_key(private_key)
         signer = PKCS1_v1_5.new(rsa)
         signature = signer.sign(hash_obj)
-        self.signature = base64.b64encode(signature)
+        self.signature = base64.b64encode(signature).decode()
        
 
     '''
