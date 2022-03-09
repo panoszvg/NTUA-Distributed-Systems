@@ -1,7 +1,8 @@
+import copy
 import json
 import time
 from random import randint
-from Crypto.Hash import SHA256
+from Crypto.Hash import SHA512
 import jsonpickle
 from numpy import broadcast
 from block import Block
@@ -63,6 +64,16 @@ class Node:
 		return sum
 
 	'''
+	For debugging purposes
+	'''
+	def print_utxos(self):
+		for i in range(0, len(self.ring)):
+			print("Node #" + str(i))
+			for utxo in self.UTXOs[i]:
+				print(utxo.to_dict())
+			print()
+
+	'''
 	Get transactions that exist in the last block
 
 	return: list of Transaction
@@ -93,10 +104,9 @@ class Node:
 			inputs = [] # list of Transaction_Input to be used
 			for transaction in self.UTXOs[self.id]:
 				sum += transaction.amount
-				print("Added Transaction_Input with id = " + transaction.id)
 				inputs.append(Transaction_Input(transaction.id))
 				if sum >= amount:
-					return inputs
+					return (inputs, sum)
 		else:
 			return None
 
@@ -165,6 +175,7 @@ class Node:
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
+			inputs, inputs_sum = self.get_transaction_inputs(100) # no need to check if it returns None, it's always correct
 			transaction = self.create_transaction(
 				sender_ip=self.ring[self.id]['ip'],
 				sender_port=self.ring[self.id]['port'],
@@ -172,7 +183,8 @@ class Node:
 				receiver_port=node['port'],
 				signature=self.wallet.private_key,
 				amount=100,
-				inputs=self.get_transaction_inputs(100) # no need to check if it returns None, it's always correct
+				inputs=inputs,
+				inputs_sum=inputs_sum
 			)
 			self.validate_transaction(transaction) # otherwise do manually
 			self.broadcast_transaction(transaction)
@@ -198,10 +210,12 @@ class Node:
 		the amount of NBC to be sent
 	inputs: list of Transaction_Input
 		list that contains previous UTXO ids
+	inputs_sum: int
+		amount of NBCs that exist in inputs
 
 	return: Transaction
 	'''
-	def create_transaction(self, sender_ip, sender_port, receiver_ip, receiver_port, signature, amount, inputs):
+	def create_transaction(self, sender_ip, sender_port, receiver_ip, receiver_port, signature, amount, inputs, inputs_sum):
 		# finder sender's id and balance and make sure it's sufficient
 		sender_id = next(item for item in self.ring if item["ip"] == sender_ip and item["port"] == sender_port)['id'] # max n iterations
 		sender_wallet_NBCs = self.get_wallet_balance(sender_id)
@@ -209,14 +223,13 @@ class Node:
 			print("Error: insufficent balance")
 			return
 		recipient_id = next(item for item in self.ring if item["ip"] == receiver_ip and item["port"] == receiver_port)['id'] # max n iterations
-		print("Choose recipient_id = " + str(recipient_id))
 
 		transaction = Transaction(self.ring[sender_id]['public_key'], self.ring[recipient_id]['public_key'], amount, inputs)
 		transaction.sign_transaction(signature)
 		output_sender = Transaction_Output(
 							transaction_id=transaction.transaction_id,
 							recipient=sender_id,
-							amount=sender_wallet_NBCs - amount
+							amount=inputs_sum - amount
 						)
 		transaction.transaction_outputs.append(output_sender)
 
@@ -261,18 +274,7 @@ class Node:
 		whether transaction is valid or not
 	'''
 	def validate_transaction(self, transaction):
-		#use of signature and NBCs balance
-		# print("Transaction to be validated:")
-		# print(transaction.to_dict())
-		# print()
-		# print("Transaction Inputs to be validated:")
-		# for input in transaction.transaction_inputs:
-		# 	print(input.to_dict())
-		# print()
-		# print("Transaction Outputs to be validated:")
-		# for input in transaction.transaction_outputs:
-		# 	print(input.to_dict())
-		# print("\n\n")
+		# use of signature and NBCs balance
 		verified = transaction.verify_signature()
 		############## also check for sufficient balance
 		if verified:
@@ -317,21 +319,18 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
-		print("\n\n\nMining...\n\n\n")
 		nonce = randint(0, 2^32)
 		while (True):
 			if self.block_received:
 				self.block_received = False
 				return # stop mining
-			sha_str = SHA256.new(json.dumps(nonce).encode()).hexdigest()
-			print(sha_str)
-			print("\n")
-			if sha_str.startswith('5'):
+			sha_str = SHA512.new(json.dumps(nonce).encode()).hexdigest()
+
+			if sha_str.startswith('0' * config.difficulty):
 				break
 
 			nonce = (nonce + 1) % (2^32)
 
-		print("Finished\n\n")
 		block = self.chain.blocks[-1]
 		block.nonce = nonce
 		block.current_hash = block.myHash()
@@ -354,7 +353,7 @@ class Node:
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
-			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(block) }) # create endpoint in rest
+			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(copy.deepcopy(block)) }) # create endpoint in rest
 
 
 		
@@ -372,7 +371,7 @@ class Node:
 		whether block is valid or not
 	'''
 	def validate_block(self, block, difficulty=config.difficulty):
-		if block.previous_hash == self.chain.blocks[-1].current_hash and block.nonce[0] == '5':
+		if block.previous_hash == self.chain.blocks[-1].current_hash and block.nonce.startswith('0'*config.difficulty):
 			return True
 		return False
 
@@ -411,14 +410,9 @@ class Node:
 			if (not req.status_code == 200):
 				print("Status code not 200")
 				exit(1)
-			print(req)
-			print(req.json())
-			print(jsonpickle.decode(req.json()['chain']))
-			print(jsonpickle.decode(req.json()['chain']).blocks)
-			print(len(jsonpickle.decode(req.json()['chain']).blocks))
 			if len(jsonpickle.decode(req.json()['chain']).blocks) > max_len:
 				max_len = len(req.json()['chain'])
 				max_info = req.json()
-		
+
 		self.chain = jsonpickle.decode(max_info['chain'])
 		self.UTXOs = jsonpickle.decode(max_info['UTXO'])

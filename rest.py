@@ -2,7 +2,7 @@ import json
 import requests
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
-
+import logging
 
 from block import Block
 from node import Node
@@ -17,6 +17,8 @@ import time
 
 
 app = Flask(__name__)
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 CORS(app)
 blockchain = Blockchain(config.capacity)
 
@@ -27,6 +29,7 @@ def client():
     time.sleep(2) # give enough time for nodes to be initialized
     print("\n        NBC Client        \n")
     while(True):
+        print(">", end=" ")
         cli_input = input()
         if cli_input[0:2] == "t ":
             print("New transaction requested")
@@ -58,7 +61,7 @@ def client():
             amount = int(cli_input[1])
 
             # validate amount
-            inputs = node.get_transaction_inputs(amount)
+            inputs, inputs_sum = node.get_transaction_inputs(amount)
             if inputs == None:
                 print("Wallet doesn't have sufficient funds to make this transaction")
                 print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
@@ -73,10 +76,12 @@ def client():
                 receiver_port=int(recipient_address.split(":")[1]),
                 amount=amount,
                 signature=node.wallet.private_key,
-                inputs=inputs
+                inputs=inputs,
+                inputs_sum=inputs_sum
             )
             node.validate_transaction(new_transaction)
             node.broadcast_transaction(new_transaction)
+            print()
 
         elif cli_input == "view":
             print("View requested")
@@ -108,7 +113,7 @@ def receive_ring():
         node.chain = jsonpickle.decode(request.json['chain']) # validate before adding
     else:
         print("Problem")
-        # exit?
+        exit(1)
     node.UTXOs = jsonpickle.decode(request.json['UTXOs'])
     _thread.start_new_thread(client, ())
     return "OK", 200
@@ -123,7 +128,6 @@ def add_block():
         node.chain.blocks[-1] = block_received
         node.chain.blocks.append(Block(block_received.current_hash, block_received.index + 1))
     else:
-        print("Problem: must validate chain")
         _thread.start_new_thread(node.resolve_conflicts, ())
     return "OK", 200
 
@@ -147,16 +151,7 @@ Get all transactions that have been added to blockchain
 @app.route('/transactions/get', methods=['GET'])
 def get_transactions():
     transactions = blockchain.get_transactions()
-    for txn in transactions:
-        txn = txn.to_dict()
-        print()
-        print(txn)
-        print()
-    print(type(transactions))
-    print(type(transactions[0].to_dict()))
-
     response = {'transactions': jsonpickle.encode(transactions)}
-    print(response)
     return jsonify(response), 200
 
 
