@@ -27,7 +27,6 @@ blockchain = Blockchain(config.capacity)
 #.......................................................................................
 
 def client():
-    time.sleep(2) # give enough time for nodes to be initialized
     print("\n        NBC Client        \n")
     while(True):
         if node.mining:
@@ -108,6 +107,7 @@ def client():
             print("t <recipient_address> <amount>: Create new transaction.")
             print("view:                           View transactions in last block.")
             print("balance:                        Show balance of wallet.")
+            print("chain:                          Show validated blocks' ids and hashes.")
             print("help:                           Show available commands.\n\n")
 
 
