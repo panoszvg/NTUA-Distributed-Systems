@@ -6,7 +6,7 @@ import jsonpickle
 import logging
 
 import config
-import block
+from block import Block
 from node import Node
 from blockchain import Blockchain
 from transaction_io import Transaction_Output
@@ -28,7 +28,11 @@ blockchain = Blockchain(config.capacity)
 def client():
     time.sleep(2) # give enough time for nodes to be initialized
     print("\n        NBC Client        \n")
-    while(True):
+    while(True):        
+        if node.mining:
+            print("Currently mining...")
+            while node.mining:
+                pass
         print(">", end=" ")
         cli_input = input()
         if cli_input[0:2] == "t ":
@@ -128,8 +132,11 @@ def add_block():
     correct_block = node.validate_block(block_received)
     if correct_block:
         node.chain.blocks[-1] = block_received
+        node.chain.blocks.append(Block(block_received.current_hash, block_received.index + 1))
+        print("\n\nAdded block to chain\n")
     else:
-        _thread.start_new_thread(node.validate_chain, ())
+        _thread.start_new_thread(node.resolve_conflicts, ())
+        print("\n\nResolving conflicts\n")
     return "OK", 200
 
 '''
@@ -171,7 +178,7 @@ if __name__ == '__main__':
     node = Node(boostrap_ip, port, 0)
     node.register_node_to_ring(node.id, node.ip, node.port, node.wallet.public_key)
     blockchain = node.chain
-    genesis = block.Block(1, 0)
+    genesis = Block(1, 0)
     first_txn = Transaction(node.wallet.public_key, node.wallet.public_key, 100 * config.nodes, [])
     first_txn_output = Transaction_Output(first_txn.transaction_id, 0, first_txn.amount)
     node.UTXOs[0].append(first_txn_output)

@@ -1,3 +1,4 @@
+import copy
 import json
 import requests
 from flask import Flask, jsonify, request, render_template
@@ -29,6 +30,10 @@ def client():
     time.sleep(2) # give enough time for nodes to be initialized
     print("\n        NBC Client        \n")
     while(True):
+        if node.mining:
+            print("Currently mining...")
+            while node.mining:
+                pass
         print(">", end=" ")
         cli_input = input()
         if cli_input[0:2] == "t ":
@@ -123,12 +128,15 @@ def receive_ring():
 def add_block():
     node.block_received = True
     block_received = jsonpickle.decode(request.json['block'])
+    print("Received block with current_hash: " + block_received.current_hash)
     correct_block = node.validate_block(block_received)
     if correct_block:
         node.chain.blocks[-1] = block_received
         node.chain.blocks.append(Block(block_received.current_hash, block_received.index + 1))
+        print("\n\nAdded block to chain\n")
     else:
         _thread.start_new_thread(node.resolve_conflicts, ())
+        print("\n\nResolving conflicts\n")
     return "OK", 200
 
 
@@ -157,7 +165,7 @@ def get_transactions():
 
 @app.route('/chain/get', methods=['GET'])
 def get_chain():
-    response = {'chain': jsonpickle.encode(node.chain), 'UTXO': jsonpickle.encode(node.UTXOs)}
+    response = {'chain': jsonpickle.encode(copy.deepcopy(node.chain)), 'UTXO': jsonpickle.encode(copy.deepcopy(node.UTXOs))}
     return jsonify(response)
 
 

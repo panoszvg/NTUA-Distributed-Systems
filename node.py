@@ -2,7 +2,6 @@ import copy
 import json
 import time
 from random import randint
-from Crypto.Hash import SHA512
 import jsonpickle
 from numpy import broadcast
 from block import Block
@@ -33,6 +32,10 @@ class Node:
 		how many nodes exist - basically size of ring
 	UTXOs: list of list of Transaction_Output
 		list of UTXOs for each node
+	block_received: bool
+		boolean that signifies whether a block was received, useful for stopping the mining process
+	mining: bool
+		boolean that signifies whether this node is currently mining
 	'''
 	def __init__(self, ip, port, id):
 		self.chain = Blockchain(config.capacity)
@@ -44,6 +47,7 @@ class Node:
 		self.port = port
 		self.ring = []
 		self.block_received = False
+		self.mining = False
 
 	'''
 	Get balance of a wallet in a node by adding its UTXOs
@@ -319,23 +323,27 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
-		nonce = randint(0, 2^32)
+		self.mining = True
+		nonce = randint(0, 2**64)
+		block = self.chain.blocks[-1]
 		while (True):
 			if self.block_received:
 				self.block_received = False
+				self.mining = False
 				return # stop mining
-			sha_str = SHA512.new(json.dumps(nonce).encode()).hexdigest()
+			block.nonce = nonce
+			block.current_hash = block.myHash()
 
-			if sha_str.startswith('0' * config.difficulty):
+			if block.current_hash.startswith('0' * config.difficulty):
+				self.mining = False
 				break
 
-			nonce = (nonce + 1) % (2^32)
+			nonce = (nonce + 1) % (2**64)
 
-		block = self.chain.blocks[-1]
-		block.nonce = nonce
-		block.current_hash = block.myHash()
+		print("Found block with current_hash: " + block.current_hash + "\n\n")
+		block_test = copy.deepcopy(block)
+		print("Test block and current_hash is: " + block_test.current_hash + "\n\n")
 		self.chain.blocks.append(Block(block.current_hash, block.index + 1))
-
 		self.broadcast_block(block)
 
 
@@ -350,10 +358,11 @@ class Node:
 	return: None
 	'''
 	def broadcast_block(self, block):
+		print("Sending block with hash: " + block.current_hash)
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
-			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(copy.deepcopy(block)) }) # create endpoint in rest
+			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(copy.deepcopy(block)) })
 
 
 		
@@ -371,7 +380,10 @@ class Node:
 		whether block is valid or not
 	'''
 	def validate_block(self, block, difficulty=config.difficulty):
-		if block.previous_hash == self.chain.blocks[-1].current_hash and block.nonce.startswith('0'*config.difficulty):
+		print("Going to validate block:\n")
+		print("New block's previous_hash is    : " + str(block.previous_hash))
+		print("Previous block's current_hash is: " + str(self.chain.blocks[-1].current_hash) + "\n\n")
+		if block.previous_hash == self.chain.blocks[-1].current_hash and block.current_hash.startswith('0'*config.difficulty):
 			return True
 		return False
 
@@ -402,6 +414,7 @@ class Node:
 		#resolve correct chain
 		max_len = 0
 		max_info = None
+		max_id = -1
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
@@ -411,8 +424,12 @@ class Node:
 				print("Status code not 200")
 				exit(1)
 			if len(jsonpickle.decode(req.json()['chain']).blocks) > max_len:
-				max_len = len(req.json()['chain'])
+				max_len = len(jsonpickle.decode(req.json()['chain']).blocks)
 				max_info = req.json()
+				max_id = node['id']
 
+		print("Got chain from " + str(max_id) + " with max length = " + str(max_len))
 		self.chain = jsonpickle.decode(max_info['chain'])
 		self.UTXOs = jsonpickle.decode(max_info['UTXO'])
+
+		print("Now last block's hash is: " + str(self.chain.blocks[-1].current_hash) + "\n\n")

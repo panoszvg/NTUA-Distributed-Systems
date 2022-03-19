@@ -1,7 +1,6 @@
 
 import json
-from Crypto.Hash import SHA256
-from pyparsing import traceParseAction
+from Crypto.Hash import SHA512
 from transaction import Transaction
 
 
@@ -28,7 +27,7 @@ class Block:
 			nonce = self.nonce,
 			previous_hash = self.previous_hash
 		))
-		return SHA256.new(block_info.encode()).hexdigest()
+		return SHA512.new(block_info.encode()).hexdigest()
 
 	'''
 	Add a transaction to the block:
