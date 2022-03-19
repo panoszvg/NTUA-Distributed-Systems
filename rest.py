@@ -31,7 +31,6 @@ def client():
     print("\n        NBC Client        \n")
     while(True):
         if node.mining:
-            print("Currently mining...")
             while node.mining:
                 pass
         print(">", end=" ")
@@ -97,6 +96,11 @@ def client():
             print("Balance requested")
             print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
             print()
+        elif cli_input == "chain":
+            print("Chain hashes requested")
+            for block in node.chain.blocks:
+                print("Idx: " + str(block.index) +", Hash: " + str(block.current_hash))
+            print()
         else:
             if cli_input != "help":
                 print("Command not recognized")
@@ -128,15 +132,12 @@ def receive_ring():
 def add_block():
     node.block_received = True
     block_received = jsonpickle.decode(request.json['block'])
-    print("Received block with current_hash: " + block_received.current_hash)
     correct_block = node.validate_block(block_received)
     if correct_block:
-        node.chain.blocks[-1] = block_received
-        node.chain.blocks.append(Block(block_received.current_hash, block_received.index + 1))
-        print("\n\nAdded block to chain\n")
+        node.chain.blocks.append(block_received)
+        node.current_block = Block(block_received.current_hash, block_received.index + 1)
     else:
         _thread.start_new_thread(node.resolve_conflicts, ())
-        print("\n\nResolving conflicts\n")
     return "OK", 200
 
 

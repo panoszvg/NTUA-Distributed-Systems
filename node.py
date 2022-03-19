@@ -25,7 +25,9 @@ class Node:
 	ring: list of dict
 		here we store information for every node, as its id, its address (ip:port) its public key (and its balance - will deprecate)
 	chain: Blockchain
-		blockchain that exists in this node
+		validated blockchain that exists in this node
+	current_block: Block
+		block that is currently being modified, when it gets a nonce, becomes part of chain
 	id: int
 		number that represents a node (0, ..., n-1)
 	current_id_count: int
@@ -39,6 +41,7 @@ class Node:
 	'''
 	def __init__(self, ip, port, id):
 		self.chain = Blockchain(config.capacity)
+		self.current_block = Block(-1, -1)
 		self.id = id
 		self.current_id_count = id # will be updated in main
 		self.UTXOs = []
@@ -83,7 +86,7 @@ class Node:
 	return: list of Transaction
 	'''
 	def view_transactions(self):
-		transactions_obj = self.chain.blocks[-1].transactions
+		transactions_obj = self.current_block.transactions
 		transactions = []
 		for transaction in transactions_obj:
 			transactions.append(transaction.to_dict())
@@ -311,8 +314,8 @@ class Node:
 	'''
 	def add_transaction_to_block(self, transaction):
 		#if enough transactions mine
-		self.chain.blocks[-1].add_transaction(transaction)
-		if len(self.chain.blocks[-1].transactions) == self.chain.capacity:
+		self.current_block.add_transaction(transaction)
+		if len(self.current_block.transactions) == self.chain.capacity:
 			_thread.start_new_thread(self.mine_block, ())
 		return
 
@@ -325,7 +328,7 @@ class Node:
 	def mine_block(self):
 		self.mining = True
 		nonce = randint(0, 2**64)
-		block = self.chain.blocks[-1]
+		block = self.current_block
 		while (True):
 			if self.block_received:
 				self.block_received = False
@@ -340,10 +343,9 @@ class Node:
 
 			nonce = (nonce + 1) % (2**64)
 
-		print("Found block with current_hash: " + block.current_hash + "\n\n")
-		block_test = copy.deepcopy(block)
-		print("Test block and current_hash is: " + block_test.current_hash + "\n\n")
-		self.chain.blocks.append(Block(block.current_hash, block.index + 1))
+		block.index = len(self.chain.blocks)
+		self.chain.blocks.append(block)
+		self.current_block = Block(block.current_hash, block.index + 1)
 		self.broadcast_block(block)
 
 
@@ -358,7 +360,6 @@ class Node:
 	return: None
 	'''
 	def broadcast_block(self, block):
-		print("Sending block with hash: " + block.current_hash)
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
@@ -379,10 +380,7 @@ class Node:
 	return: bool
 		whether block is valid or not
 	'''
-	def validate_block(self, block, difficulty=config.difficulty):
-		print("Going to validate block:\n")
-		print("New block's previous_hash is    : " + str(block.previous_hash))
-		print("Previous block's current_hash is: " + str(self.chain.blocks[-1].current_hash) + "\n\n")
+	def validate_block(self, block):
 		if block.previous_hash == self.chain.blocks[-1].current_hash and block.current_hash.startswith('0'*config.difficulty):
 			return True
 		return False
@@ -426,10 +424,7 @@ class Node:
 			if len(jsonpickle.decode(req.json()['chain']).blocks) > max_len:
 				max_len = len(jsonpickle.decode(req.json()['chain']).blocks)
 				max_info = req.json()
-				max_id = node['id']
 
-		print("Got chain from " + str(max_id) + " with max length = " + str(max_len))
 		self.chain = jsonpickle.decode(max_info['chain'])
 		self.UTXOs = jsonpickle.decode(max_info['UTXO'])
-
-		print("Now last block's hash is: " + str(self.chain.blocks[-1].current_hash) + "\n\n")
+		self.current_block = self.create_new_block(self.chain.blocks[-1].current_hash, max_len)
