@@ -167,6 +167,7 @@ class Node:
 	return: Node
 	'''
 	def initialize_nodes(self):
+		time.sleep(1)
 		data = { 'ring': self.ring, 'chain': jsonpickle.encode(self.chain), 'UTXOs': jsonpickle.encode(self.UTXOs) }
 
 		for node in self.ring:

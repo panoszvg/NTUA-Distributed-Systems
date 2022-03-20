@@ -110,6 +110,58 @@ def client():
             print("help:                           Show available commands.\n\n")
 
 
+def simulation():
+    while node.current_id_count != config.nodes:
+        pass
+    print("----> " + str(node.current_id_count))
+
+    while not (node.get_wallet_balance(0) == 100 \
+    and node.get_wallet_balance(1) == 100 \
+    and node.get_wallet_balance(2) == 100 \
+    and node.get_wallet_balance(3) == 100 \
+    and node.get_wallet_balance(4) == 100):
+        print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
+
+    print("All wallets have 100 NBCs")
+    print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
+
+    file = open("transactions/5nodes/transactions" + str(node.id) + ".txt", "r")
+    for line in file:
+        while node.mining:
+            pass
+        id, amount = line.split(" ")
+        id = int(id[-1])
+        amount = int(amount)
+
+        print("id: " + str(id) + "  --> IP: " + str(node.ring[id]['ip']) + "  --> Port: " + str(node.ring[id]['port']))
+        print("amount: " + str(amount))
+        print()
+
+        temp = node.get_transaction_inputs(amount)
+        if temp == None:
+            print("Wallet doesn't have sufficient funds to make this transaction")
+            print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
+            print()
+            continue
+        
+        inputs, inputs_sum = temp
+
+        # create transaction
+        new_transaction = node.create_transaction(
+            sender_ip=node.ip,
+            sender_port=node.port,
+            receiver_ip=str(node.ring[id]['ip']),
+            receiver_port=node.ring[id]['port'],
+            amount=amount,
+            signature=node.wallet.private_key,
+            inputs=inputs,
+            inputs_sum=inputs_sum
+        )
+        node.validate_transaction(new_transaction)
+        node.broadcast_transaction(new_transaction)
+    print("Done")
+
+
 '''
 When a node wants to be registered and get an id, it will use this endpoint
 '''
@@ -124,7 +176,11 @@ def register_node():
     )
     if node.current_id_count == config.nodes:
         _thread.start_new_thread(node.initialize_nodes, ())
-        _thread.start_new_thread(client, ())
+        time.sleep(1)
+        if config.simulation:
+            _thread.start_new_thread(simulation, ())
+        else:
+            _thread.start_new_thread(client, ())
     
     response = {'id': node.current_id_count - 1}
     return response, 200

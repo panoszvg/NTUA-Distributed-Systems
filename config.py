@@ -1,3 +1,4 @@
-nodes=3
-capacity=4
-difficulty=3
+nodes=5
+capacity=10
+difficulty=2
+simulation=True
