@@ -91,6 +91,11 @@ def client():
             print("Balance requested")
             print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
             print()
+        elif cli_input == "balances":
+            print("Balances requested")
+            for i in range(0, config.nodes):
+                print("Wallet: " + str(node.get_wallet_balance(i)) + " NBC")
+            print()
         elif cli_input == "chain":
             print("Chain hashes requested")
             for block in node.chain.blocks:
@@ -103,6 +108,7 @@ def client():
             print("t <recipient_address> <amount>: Create new transaction.")
             print("view:                           View transactions in last block.")
             print("balance:                        Show balance of wallet.")
+            print("balances:                       Show balances of all wallets.")
             print("chain:                          Show validated blocks' ids and hashes.")
             print("help:                           Show available commands.\n\n")
 
