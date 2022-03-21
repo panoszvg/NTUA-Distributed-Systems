@@ -64,8 +64,7 @@ class Node:
 			while not self.lock.acquire(blocking=False):
 				pass
 			if DEBUG:
-				print("Out of loop ----------------")
-				print("After lock")
+				print("Now processing pending transaction...")
 			try:
 				transaction = self.pending_transactions.popleft()
 			except:
@@ -322,7 +321,10 @@ class Node:
 				try:
 					self.UTXOs[sender_id].remove(utxo_to_be_deleted)
 				except:
-					_thread.start_new_thread(self.resolve_conflicts, ())
+					if config.scalable:
+						_thread.start_new_thread(self.resolve_conflicts_scalable, ())
+					else:
+						_thread.start_new_thread(self.resolve_conflicts, ())
 					return False
 			# add all (both) outputs to UTXOs
 			for output in transaction.transaction_outputs:
@@ -361,6 +363,8 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
+		if DEBUG:
+			print("Mining...")
 		self.mining = True
 		nonce = randint(0, 2**64)
 		block = self.current_block
@@ -447,11 +451,10 @@ class Node:
 		#resolve correct chain
 		max_len = 0
 		max_info = None
-		max_id = -1
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
-			url = url = "http://" + node['ip'] + ":" + str(node['port']) + "/chain/get"
+			url = "http://" + node['ip'] + ":" + str(node['port']) + "/chain/get"
 			req = requests.get(url)
 			if (not req.status_code == 200):
 				print("Status code not 200")
@@ -464,5 +467,59 @@ class Node:
 			pass
 		self.chain = jsonpickle.decode(max_info['chain'])
 		self.current_block = jsonpickle.decode(max_info['current_block'])
+		if self.lock.locked():
+			self.lock.release()
+
+
+	'''
+	This function resolves conflicts for scalable systems, since it first finds the node
+	with max chain length, finds out which blocks it needs from it and requests that number
+	of blocks from that node, to replace its own.
+	'''
+	def resolve_conflicts_scalable(self):
+		#resolve correct chain
+		max_len = 0
+		max_info = None
+		max_id = -1
+		# find node with max chain length
+		for node in self.ring:
+			if node['id'] == self.id:
+				continue
+			url = "http://" + node['ip'] + ":" + str(node['port']) + "/chain/length"
+			req = requests.get(url)
+			if (not req.status_code == 200):
+				print("Status code not 200")
+				exit(1)
+			if jsonpickle.decode(req.json()['length']) > max_len:
+				max_id = node['id']
+				max_len = jsonpickle.decode(req.json()['length'])
+				max_info = jsonpickle.decode(req.json()['chain'])
+
+		# find how many blocks to request
+		request_length = 1
+		for block in reversed(self.chain.blocks):
+			pass
+			if block.current_hash in max_info:
+				break
+			else:
+				request_length += 1
+
+		# request the last @request_length blocks from node with max chain length
+		url = "http://" + self.ring[max_id]['ip'] + ":" + str(self.ring[max_id]['port']) + "/chain/get/" + str(request_length)
+		req = requests.get(url)
+		if (not req.status_code == 200):
+			print("Status code not 200")
+			exit(1)
+		new_blocks = jsonpickle.decode(req.json()['blocks'])
+
+		# replace last @request_length blocks of chain with blocks from node with max chain length
+		while not self.lock.acquire(blocking=False):
+			pass
+		for i in range(0, request_length):
+			self.chain.blocks.pop()
+		for new_block in new_blocks:
+			self.chain.blocks.append(new_block)
+		self.current_block = jsonpickle.decode(req.json()['current_block'])
+
 		if self.lock.locked():
 			self.lock.release()

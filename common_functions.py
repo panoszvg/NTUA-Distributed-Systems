@@ -58,12 +58,14 @@ def client():
             amount = int(cli_input[1])
 
             # validate amount
-            inputs, inputs_sum = node.get_transaction_inputs(amount)
-            if inputs == None:
+            temp = node.get_transaction_inputs(amount)
+            if temp == None:
                 print("Wallet doesn't have sufficient funds to make this transaction")
                 print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
                 print()
                 continue
+
+            inputs, inputs_sum = temp
 
             # create transaction
             new_transaction = node.create_transaction(
@@ -128,6 +130,8 @@ def simulation():
         print("All wallets have 100 NBCs")
         print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
 
+    timestamp_1 = time.time()
+
     file = open("transactions/" + str(config.nodes) + "nodes/transactions" + str(node.id) + ".txt", "r")
     for line in file:
         while node.mining:
@@ -177,6 +181,8 @@ def simulation():
             node.add_transaction_to_block(new_transaction)
             node.broadcast_transaction(new_transaction)
     print("Simulation is done")
+    timestamp_2 = time.time()
+    print("Time spent in simulation: " + str(timestamp_2 - timestamp_1) + " sec.")
     client()
 
 
@@ -193,7 +199,10 @@ def add_block():
         node.chain.blocks.append(block_received)
         node.current_block = Block(block_received.current_hash, block_received.index + 1)
     else:
-        _thread.start_new_thread(node.resolve_conflicts, ())
+        if config.scalable:
+            _thread.start_new_thread(node.resolve_conflicts_scalable, ())
+        else:
+            _thread.start_new_thread(node.resolve_conflicts, ())
     return "OK", 200
 
 
@@ -232,8 +241,31 @@ Endpoint used when resolving conflicts, give chain (and other info) to update no
 def get_chain():
     response = {
         'chain': jsonpickle.encode(copy.deepcopy(node.chain)),
-        'UTXO': jsonpickle.encode(copy.deepcopy(node.UTXOs)),
-        'pending_transactions': jsonpickle.encode(copy.deepcopy(node.pending_transactions)),
         'current_block': jsonpickle.encode(node.current_block)
     }
+    return jsonify(response), 200
+
+'''
+Endpoint used when resolving conflicts (optimised), give chain length and hashes
+'''
+@rest.route('/chain/length', methods=['GET'])
+def get_chain_length():
+    chain_hashes = []
+    for block in node.chain.blocks:
+        chain_hashes.append(block.current_hash)
+    response = {
+        'chain': jsonpickle.encode(copy.deepcopy(chain_hashes)),
+        'length': jsonpickle.encode(len(node.chain.blocks))
+    }
     return jsonify(response)
+
+'''
+Endpoint used when resolving conflicts, give chain (and other info) to update node that asks for it
+'''
+@rest.route('/chain/get/<blocks>', methods=['GET'])
+def get_chain_last(blocks):
+    response = {
+        'blocks': jsonpickle.encode(copy.deepcopy(node.chain.blocks[-int(blocks):])),
+        'current_block': jsonpickle.encode(node.current_block)
+    }
+    return jsonify(response), 200
