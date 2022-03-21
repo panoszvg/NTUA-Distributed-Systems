@@ -11,6 +11,7 @@ from transaction_io import Transaction_Input, Transaction_Output
 from wallet import Wallet
 import requests
 import config
+from config import DEBUG
 import _thread, threading
 
 class Node:
@@ -60,32 +61,25 @@ class Node:
 		while True:
 			while len(self.pending_transactions) == 0:
 				pass
-			# if self.pending_transactions.empty():
-			# 	return
-			# flag = True
 			while not self.lock.acquire(blocking=False):
-				# flag = 
-				print("Blocking in worker")
-			print("Out of loop ----------------")
-			print("After lock")
+				pass
+			if DEBUG:
+				print("Out of loop ----------------")
+				print("After lock")
 			try:
 				transaction = self.pending_transactions.popleft()
 			except:
-				print("Failed mothafucka")
+				if DEBUG:
+					print("Failed")
 				if self.lock.locked():
 					self.lock.release()
 				continue
 
-			print(f'Working on {transaction}')
 			valid_transaction = self.validate_transaction(transaction)
 			if valid_transaction:
-				print("Valid transaction")
 				self.add_transaction_to_block(transaction)
-			print(f'Finished {transaction}')
 			if self.lock.locked():
 				self.lock.release()
-			print("After release")
-			print("Wallet: " + str(self.get_wallet_balance(self.id)) + " NBC")
 
 
 	'''
@@ -296,13 +290,11 @@ class Node:
 	return: None
 	'''
 	def broadcast_transaction(self, transaction):
-		print("Broadcasting...")
 		json = { 'transaction': jsonpickle.encode(transaction) }
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
 			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/transaction/receive", json=json)
-		print("Finished broadcasting")
 
 
 	'''
@@ -330,8 +322,6 @@ class Node:
 				try:
 					self.UTXOs[sender_id].remove(utxo_to_be_deleted)
 				except:
-					# if self.lock.locked():
-					# 	self.lock.release()
 					_thread.start_new_thread(self.resolve_conflicts, ())
 					return False
 			# add all (both) outputs to UTXOs
@@ -371,7 +361,6 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
-		print("Mining")
 		self.mining = True
 		nonce = randint(0, 2**64)
 		block = self.current_block
@@ -472,13 +461,8 @@ class Node:
 				max_info = req.json()
 
 		while not self.lock.acquire(blocking=False):
-			print("Blocking in resolving conflicts")
+			pass
 		self.chain = jsonpickle.decode(max_info['chain'])
-		# self.UTXOs = jsonpickle.decode(max_info['UTXO'])
-		# self.pending_transactions = jsonpickle.decode(max_info['pending_transactions'])
-		# self.current_block = self.create_new_block(self.chain.blocks[-1].current_hash, max_len)
 		self.current_block = jsonpickle.decode(max_info['current_block'])
 		if self.lock.locked():
 			self.lock.release()
-		print("After resolving conflicts")
-		print("Wallet: " + str(self.get_wallet_balance(self.id)))

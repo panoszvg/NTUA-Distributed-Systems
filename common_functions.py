@@ -7,6 +7,7 @@ from node import Node
 from blockchain import Blockchain
 from transaction_io import Transaction_Output
 from transaction import Transaction
+from config import DEBUG
 import config, copy, json, jsonpickle, logging, requests, time, _thread
 
 boostrap_ip = '127.0.0.1'
@@ -116,12 +117,12 @@ def simulation():
     and node.get_wallet_balance(3) == 100 \
     and node.get_wallet_balance(4) == 100):
         pass
-    print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
 
-    print("All wallets have 100 NBCs")
-    print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
+    if DEBUG:
+        print("All wallets have 100 NBCs")
+        print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
 
-    file = open("transactions/5nodes/transactions" + str(node.id) + ".txt", "r")
+    file = open("transactions/" + str(config.nodes) + "nodes/transactions" + str(node.id) + ".txt", "r")
     for line in file:
         while node.mining:
             pass
@@ -129,25 +130,23 @@ def simulation():
         id = int(id[-1])
         amount = int(amount)
 
-        print("id: " + str(id) + "  --> IP: " + str(node.ring[id]['ip']) + "  --> Port: " + str(node.ring[id]['port']))
-        print("amount: " + str(amount))
-        print()
+        if DEBUG:
+            print("id: " + str(id) + "  --> IP: " + str(node.ring[id]['ip']) + "  --> Port: " + str(node.ring[id]['port']))
+            print("amount: " + str(amount))
+            print()
 			
-        count = 100
         while not node.lock.acquire(blocking=False):
-            # print("Blocking in simulation")
-            count -= 10
-            # if count == 0:
-                # exit(1)
+            pass
 
-        print("Before acquiring lock in simulation")
-        # node.lock.acquire(blocking=True)
-        print("Acquired lock in simulation")
+        if DEBUG:
+            print("Before acquiring lock in simulation")
+            print("Acquired lock in simulation")
         temp = node.get_transaction_inputs(amount)
         if temp == None:
-            print("Wallet doesn't have sufficient funds to make this transaction")
-            print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
-            print()
+            if DEBUG:
+                print("Wallet doesn't have sufficient funds to make this transaction")
+                print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
+                print()
             if node.lock.locked():
                 node.lock.release()
             continue
@@ -168,16 +167,11 @@ def simulation():
         valid_transaction = node.validate_transaction(new_transaction)
         if node.lock.locked():
             node.lock.release()
-        print("Released lock in simulation")
         if valid_transaction:
             node.add_transaction_to_block(new_transaction)
             node.broadcast_transaction(new_transaction)
     print("Simulation is done")
-    print("Chain hashes requested")
-    for block in node.chain.blocks:
-        print("Idx: " + str(block.index) +", Hash: " + str(block.current_hash))
-    print()
-    print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
+    client()
 
 
 
@@ -190,11 +184,9 @@ def add_block():
     block_received = jsonpickle.decode(request.json['block'])
     correct_block = node.validate_block(block_received)
     if correct_block:
-        print("+++++++ Added block")
         node.chain.blocks.append(block_received)
         node.current_block = Block(block_received.current_hash, block_received.index + 1)
     else:
-        print("+--+--+ Resolving conflicts")
         _thread.start_new_thread(node.resolve_conflicts, ())
     return "OK", 200
 
@@ -204,11 +196,9 @@ When a transaction is created and broadcasted, it will be received in this endpo
 '''
 @rest.route('/transaction/receive', methods=['POST'])
 def receive_transaction():
-    print("## Received txn")
     transaction = request.json['transaction']
     transaction = jsonpickle.decode(transaction)
     node.pending_transactions.append(transaction)
-    # _thread.start_new_thread(node.pending_transactions.join, ())
     return "OK", 200
 
 '''
