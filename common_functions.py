@@ -1,3 +1,4 @@
+import queue
 from flask import Blueprint, Flask, jsonify, request
 from flask_cors import CORS
 
@@ -74,8 +75,10 @@ def client():
                 inputs=inputs,
                 inputs_sum=inputs_sum
             )
-            node.validate_transaction(new_transaction)
-            node.broadcast_transaction(new_transaction)
+            valid_transaction = node.validate_transaction(new_transaction)
+            if valid_transaction:
+                node.add_transaction_to_block(new_transaction)
+                node.broadcast_transaction(new_transaction)
             print()
 
         elif cli_input == "view":
@@ -106,14 +109,14 @@ def client():
 def simulation():
     while node.current_id_count != config.nodes:
         pass
-    print("----> " + str(node.current_id_count))
 
     while not (node.get_wallet_balance(0) == 100 \
     and node.get_wallet_balance(1) == 100 \
     and node.get_wallet_balance(2) == 100 \
     and node.get_wallet_balance(3) == 100 \
     and node.get_wallet_balance(4) == 100):
-        print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
+        pass
+    print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
 
     print("All wallets have 100 NBCs")
     print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
@@ -129,12 +132,24 @@ def simulation():
         print("id: " + str(id) + "  --> IP: " + str(node.ring[id]['ip']) + "  --> Port: " + str(node.ring[id]['port']))
         print("amount: " + str(amount))
         print()
+			
+        count = 100
+        while not node.lock.acquire(blocking=False):
+            # print("Blocking in simulation")
+            count -= 10
+            # if count == 0:
+                # exit(1)
 
+        print("Before acquiring lock in simulation")
+        # node.lock.acquire(blocking=True)
+        print("Acquired lock in simulation")
         temp = node.get_transaction_inputs(amount)
         if temp == None:
             print("Wallet doesn't have sufficient funds to make this transaction")
             print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
             print()
+            if node.lock.locked():
+                node.lock.release()
             continue
         
         inputs, inputs_sum = temp
@@ -150,9 +165,20 @@ def simulation():
             inputs=inputs,
             inputs_sum=inputs_sum
         )
-        node.validate_transaction(new_transaction)
-        node.broadcast_transaction(new_transaction)
-    print("Done")
+        valid_transaction = node.validate_transaction(new_transaction)
+        if node.lock.locked():
+            node.lock.release()
+        print("Released lock in simulation")
+        if valid_transaction:
+            node.add_transaction_to_block(new_transaction)
+            node.broadcast_transaction(new_transaction)
+    print("Simulation is done")
+    print("Chain hashes requested")
+    for block in node.chain.blocks:
+        print("Idx: " + str(block.index) +", Hash: " + str(block.current_hash))
+    print()
+    print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
+
 
 
 '''
@@ -164,9 +190,11 @@ def add_block():
     block_received = jsonpickle.decode(request.json['block'])
     correct_block = node.validate_block(block_received)
     if correct_block:
+        print("+++++++ Added block")
         node.chain.blocks.append(block_received)
         node.current_block = Block(block_received.current_hash, block_received.index + 1)
     else:
+        print("+--+--+ Resolving conflicts")
         _thread.start_new_thread(node.resolve_conflicts, ())
     return "OK", 200
 
@@ -176,11 +204,11 @@ When a transaction is created and broadcasted, it will be received in this endpo
 '''
 @rest.route('/transaction/receive', methods=['POST'])
 def receive_transaction():
+    print("## Received txn")
     transaction = request.json['transaction']
     transaction = jsonpickle.decode(transaction)
-    valid_transaction = node.validate_transaction(transaction)
-    if valid_transaction:
-        node.add_transaction_to_block(transaction)
+    node.pending_transactions.append(transaction)
+    # _thread.start_new_thread(node.pending_transactions.join, ())
     return "OK", 200
 
 '''
@@ -192,10 +220,24 @@ def get_transactions():
     response = {'transactions': jsonpickle.encode(transactions)}
     return jsonify(response), 200
 
+
+
+
+@rest.route('/balance', methods=['GET'])
+def balance():
+    balance = node.get_wallet_balance()
+    response = {'balance': jsonpickle.encode(balance)}
+    return jsonify(response), 200
+
 '''
 Endpoint used when resolving conflicts, give chain (and other info) to update node that asks for it
 '''
 @rest.route('/chain/get', methods=['GET'])
 def get_chain():
-    response = {'chain': jsonpickle.encode(copy.deepcopy(node.chain)), 'UTXO': jsonpickle.encode(copy.deepcopy(node.UTXOs))}
+    response = {
+        'chain': jsonpickle.encode(copy.deepcopy(node.chain)),
+        'UTXO': jsonpickle.encode(copy.deepcopy(node.UTXOs)),
+        'pending_transactions': jsonpickle.encode(copy.deepcopy(node.pending_transactions)),
+        'current_block': jsonpickle.encode(node.current_block)
+    }
     return jsonify(response)

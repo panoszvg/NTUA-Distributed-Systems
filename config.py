@@ -1,4 +1,4 @@
 nodes=5
-capacity=10
-difficulty=2
+capacity=1
+difficulty=4
 simulation=True

@@ -36,6 +36,7 @@ def register_node():
     if node.current_id_count == config.nodes:
         _thread.start_new_thread(node.initialize_nodes, ())
         time.sleep(1)
+        _thread.start_new_thread(node.worker, ())
         if config.simulation:
             _thread.start_new_thread(simulation, ())
         else:

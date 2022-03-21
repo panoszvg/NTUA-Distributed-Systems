@@ -34,6 +34,7 @@ def receive_ring():
         exit(1)
     node.UTXOs = jsonpickle.decode(request.json['UTXOs'])
     node.current_id_count = len(node.UTXOs)
+    _thread.start_new_thread(node.worker, ())
     if config.simulation:
         _thread.start_new_thread(simulation, ())
     else:
