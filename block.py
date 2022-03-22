@@ -1,9 +1,6 @@
 
 import json
 from Crypto.Hash import SHA512
-from transaction import Transaction
-
-
 
 class Block:
 	'''

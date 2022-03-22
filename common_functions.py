@@ -1,14 +1,9 @@
-import queue
-from flask import Blueprint, Flask, jsonify, request
-from flask_cors import CORS
-
+from flask import Blueprint, jsonify, request
 from block import Block
 from node import Node
 from blockchain import Blockchain
-from transaction_io import Transaction_Output
-from transaction import Transaction
 from config import DEBUG
-import config, copy, json, jsonpickle, logging, requests, time, _thread
+import config, copy, jsonpickle, time, _thread
 
 boostrap_ip = '127.0.0.1'
 node = Node(boostrap_ip, 5000, 0)

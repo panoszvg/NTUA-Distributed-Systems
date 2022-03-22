@@ -1,12 +1,10 @@
-from flask import Flask, jsonify, request
+from flask import Flask, request
 from flask_cors import CORS
-
 from block import Block
-from node import Node
 from blockchain import Blockchain
 from transaction_io import Transaction_Output
 from transaction import Transaction
-import config, copy, json, jsonpickle, logging, requests, time, _thread
+import config, logging, time, _thread
 from common_functions import *
 
 

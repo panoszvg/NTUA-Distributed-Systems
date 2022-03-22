@@ -1,21 +1,9 @@
 import base64
-from collections import OrderedDict
-
-import binascii
-from inspect import signature
-
-import Crypto
-import Crypto.Random
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
-
 import json
-import requests
-from flask import Flask, jsonify, request, render_template
-from rsa import sign
 
-from transaction_io import Transaction_Input, Transaction_Output
 
 class Transaction:
 
