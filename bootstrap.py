@@ -62,4 +62,4 @@ if __name__ == '__main__':
     blockchain.add_block(genesis)
     node.current_block = node.create_new_block(1, 1)
 
-    app.run(host='127.0.0.1', port=port)
+    app.run(host=config.bootstrap_ip, port=port)

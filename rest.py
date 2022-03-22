@@ -1,10 +1,7 @@
 from flask import Flask, request
 from flask_cors import CORS
-
 from blockchain import Blockchain
-
-
-import config, json, jsonpickle, logging, requests, _thread
+import config, json, jsonpickle, logging, requests, _thread, os
 from common_functions import *
 
 
@@ -51,12 +48,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
     port = args.port
     node.port = port
+    ipv4 = os.popen('ip addr show eth1 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
     data = {
-        'ip': '127.0.0.1',
+        'ip': ipv4,
         'port': port,
         'public_key': node.wallet.public_key
     }
-    req = requests.post('http://localhost:5000/node/register', json=data)
+    req = requests.post('http://' + config.bootstrap_ip + ':5000/node/register', json=data)
     if (not req.status_code == 200):
         print("Problem")
         exit(1)
@@ -64,4 +62,4 @@ if __name__ == '__main__':
     node.id = json.loads(req.content.decode())['id']
     node.current_id_count = node.id + 1
 
-    app.run(host='127.0.0.1', port=port)
+    app.run(host=ipv4, port=port)

@@ -2,11 +2,10 @@ from flask import Blueprint, jsonify, request
 from block import Block
 from node import Node
 from blockchain import Blockchain
-from config import DEBUG
+from config import DEBUG, bootstrap_ip
 import config, copy, jsonpickle, time, _thread
 
-boostrap_ip = '127.0.0.1'
-node = Node(boostrap_ip, 5000, 0)
+node = Node(bootstrap_ip, 5000, 0)
 
 
 rest = Blueprint('rest', __name__)
