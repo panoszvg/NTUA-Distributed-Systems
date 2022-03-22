@@ -71,7 +71,7 @@ class Transaction:
     '''
     def sign_transaction(self, private_key):
         hash_obj = self.get_hash()
-        rsa = RSA.import_key(private_key)
+        rsa = RSA.importKey(private_key)
         signer = PKCS1_v1_5.new(rsa)
         signature = signer.sign(hash_obj)
         self.signature = base64.b64encode(signature).decode()
@@ -85,7 +85,7 @@ class Transaction:
     return: bool
     '''
     def verify_signature(self):
-        rsa = RSA.import_key(self.sender_address)
+        rsa = RSA.importKey(self.sender_address)
         verifier = PKCS1_v1_5.new(rsa)
         signature = self.signature
         hash_obj = self.get_hash()

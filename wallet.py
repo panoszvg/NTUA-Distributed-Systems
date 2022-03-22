@@ -7,8 +7,8 @@ class Wallet:
 	'''
 	def __init__(self):
 		rand_gen = RSA.generate(2048)
-		self.public_key = rand_gen.publickey().export_key().decode() 
-		self.private_key = rand_gen.export_key().decode() 
+		self.public_key = rand_gen.publickey().exportKey().decode() 
+		self.private_key = rand_gen.exportKey().decode() 
 		#self_address
 		self.transactions = []
 
