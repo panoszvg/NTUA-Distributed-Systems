@@ -20,7 +20,7 @@ When all nodes are inserted, bootstrap will use this endpoint to broadcast the r
 '''
 @app.route('/node/initialize', methods=['POST'])
 def receive_ring():
-    node.ring = request.json['ring']
+    node.ring = jsonpickle.decode(request.json['ring'])
     valid_chain = node.validate_chain(jsonpickle.decode(request.json['chain']))
     if valid_chain: 
         node.chain = jsonpickle.decode(request.json['chain']) # validate before adding
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     data = {
         'ip': ipv4,
         'port': port,
-        'public_key': node.wallet.public_key
+        'public_key': jsonpickle.encode(node.wallet.public_key)
     }
     req = requests.post('http://' + config.bootstrap_ip + ':5000/node/register', json=data)
     if (not req.status_code == 200):

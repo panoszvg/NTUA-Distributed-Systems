@@ -195,8 +195,8 @@ class Node:
 	return: Node
 	'''
 	def initialize_nodes(self):
-		time.sleep(1)
-		data = { 'ring': self.ring, 'chain': jsonpickle.encode(self.chain), 'UTXOs': jsonpickle.encode(self.UTXOs) }
+		time.sleep(15)
+		data = { 'ring': jsonpickle.encode(self.ring), 'chain': jsonpickle.encode(self.chain), 'UTXOs': jsonpickle.encode(self.UTXOs) }
 
 		for node in self.ring:
 			if node['id'] == self.id:
@@ -216,12 +216,13 @@ class Node:
 				sender_port=self.ring[self.id]['port'],
 				receiver_ip=node['ip'],
 				receiver_port=node['port'],
-				signature=self.wallet.private_key,
 				amount=100,
 				inputs=inputs,
 				inputs_sum=inputs_sum
 			)
-			self.validate_transaction(transaction) # otherwise do manually
+			valid_transaction = self.validate_transaction(transaction) # otherwise do manually
+			if valid_transaction:
+				self.add_transaction_to_block(transaction)
 			self.broadcast_transaction(transaction)
 
 
@@ -250,9 +251,9 @@ class Node:
 
 	return: Transaction
 	'''
-	def create_transaction(self, sender_ip, sender_port, receiver_ip, receiver_port, signature, amount, inputs, inputs_sum):
+	def create_transaction(self, sender_ip, sender_port, receiver_ip, receiver_port, amount, inputs, inputs_sum):
 		# finder sender's id and balance and make sure it's sufficient
-		sender_id = next(item for item in self.ring if item["ip"] == sender_ip and item["port"] == sender_port)['id'] # max n iterations
+		sender_id = self.id
 		sender_wallet_NBCs = self.get_wallet_balance(sender_id)
 		if sender_wallet_NBCs < amount:
 			print("Error: insufficent balance")
@@ -260,7 +261,7 @@ class Node:
 		recipient_id = next(item for item in self.ring if item["ip"] == receiver_ip and item["port"] == receiver_port)['id'] # max n iterations
 
 		transaction = Transaction(self.ring[sender_id]['public_key'], self.ring[recipient_id]['public_key'], amount, inputs)
-		transaction.sign_transaction(signature)
+		transaction.sign_transaction(self.wallet.private_key)
 		output_sender = Transaction_Output(
 							transaction_id=transaction.transaction_id,
 							recipient=sender_id,
@@ -313,7 +314,12 @@ class Node:
 		############## also check for sufficient balance
 		if verified:
 			# find id of sender
-			sender_id = next(item for item in self.ring if item["public_key"] == transaction.sender_address)['id'] # max n iterations
+
+			temp = None
+			for item in self.ring:
+				if item["public_key"] == transaction.sender_address:
+					temp = item["id"]
+			sender_id = temp
 			# for that sender, find all UTXOs that correspond to the inputs and delete them
 			for input in transaction.transaction_inputs:
 				utxo_to_be_deleted = next((x for x in self.UTXOs[sender_id] if x.id == input.previous_output_id), None)
@@ -362,8 +368,6 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
-		if DEBUG:
-			print("Mining...")
 		self.mining = True
 		nonce = randint(0, 2**64)
 		block = self.current_block

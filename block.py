@@ -1,6 +1,7 @@
 
 import json
 from Crypto.Hash import SHA512
+import jsonpickle
 
 class Block:
 	'''
@@ -20,7 +21,7 @@ class Block:
 	def myHash(self):
 		block_info = json.dumps(dict(
 			index = self.index,
-			transactions = [item.to_dict() for item in self.transactions],
+			transactions = [jsonpickle.encode(item.to_dict()) for item in self.transactions],
 			nonce = self.nonce,
 			previous_hash = self.previous_hash
 		))

@@ -1,8 +1,16 @@
 import base64
 from Crypto.Hash import SHA256
-from Crypto.PublicKey import RSA
+# from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, utils
 import json
+
+import jsonpickle
 
 
 class Transaction:
@@ -42,8 +50,8 @@ class Transaction:
     '''
     def get_hash(self):
         transaction_info = json.dumps(dict(
-            sender_address = self.sender_address,
-            receiver_address = self.receiver_address,
+            sender_address = jsonpickle.encode(self.sender_address),
+            receiver_address = jsonpickle.encode(self.receiver_address),
             amount = self.amount,
             transaction_inputs = [item.to_dict() for item in self.transaction_inputs]
         ))
@@ -51,8 +59,8 @@ class Transaction:
     
     def to_dict(self):
         return dict(
-            sender_address = self.sender_address,
-            receiver_address = self.receiver_address,
+            sender_address = jsonpickle.encode(self.sender_address),
+            receiver_address = jsonpickle.encode(self.receiver_address),
             amount = self.amount,
             transaction_id = self.transaction_id,
             transaction_inputs = [item.to_dict() for item in self.transaction_inputs],
@@ -70,11 +78,29 @@ class Transaction:
         the private key of the sender's wallet
     '''
     def sign_transaction(self, private_key):
-        hash_obj = self.get_hash()
-        rsa = RSA.importKey(private_key)
-        signer = PKCS1_v1_5.new(rsa)
-        signature = signer.sign(hash_obj)
-        self.signature = base64.b64encode(signature).decode()
+        # hash_obj = self.get_hash()
+        # rsa = RSA.importKey(private_key)
+        # signer = PKCS1_v1_5.new(rsa)
+        # signature = signer.sign(hash_obj)
+        # self.signature = base64.b64encode(signature).decode()
+
+        ########################################
+
+        private_key_loaded = serialization.load_pem_private_key(
+            private_key,
+            password = None,
+            backend=default_backend()
+        )
+
+        self.signature = private_key_loaded.sign(
+            b"",
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+
        
 
     '''
@@ -85,9 +111,25 @@ class Transaction:
     return: bool
     '''
     def verify_signature(self):
-        rsa = RSA.importKey(self.sender_address)
-        verifier = PKCS1_v1_5.new(rsa)
-        signature = self.signature
-        hash_obj = self.get_hash()
-        verified = verifier.verify(hash_obj, base64.b64decode(signature))
-        return verified
+        # rsa = RSA.importKey(self.sender_address)
+        # verifier = PKCS1_v1_5.new(rsa)
+        # signature = self.signature
+        # hash_obj = self.get_hash()
+        # verified = verifier.verify(hash_obj, base64.b64decode(signature))
+        # return verified
+
+        #############################
+        try:
+            self.sender_address.verify(
+                self.signature,
+                b"",
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+        except:
+            return False
+        finally:
+            return True

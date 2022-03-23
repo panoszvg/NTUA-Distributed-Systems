@@ -17,14 +17,14 @@ blockchain = Blockchain(config.capacity)
 def client():
     print("\n        NBC Client        \n")
     while(True):        
-        if node.mining:
-            while node.mining:
-                pass
         print(">", end=" ")
         cli_input = input()
         if cli_input[0:2] == "t ":
             print("New transaction requested")
-
+            if node.mining:
+                print("Not accepting transactions at the moment because of mining process, try again later.\n")
+                continue
+            
             # split string to arguments
             cli_input = cli_input[2:].split()
             if len(cli_input) != 2:
@@ -68,7 +68,6 @@ def client():
                 receiver_ip=recipient_address.split(":")[0],
                 receiver_port=int(recipient_address.split(":")[1]),
                 amount=amount,
-                signature=node.wallet.private_key,
                 inputs=inputs,
                 inputs_sum=inputs_sum
             )
@@ -164,7 +163,6 @@ def simulation():
             receiver_ip=str(node.ring[id]['ip']),
             receiver_port=node.ring[id]['port'],
             amount=amount,
-            signature=node.wallet.private_key,
             inputs=inputs,
             inputs_sum=inputs_sum
         )

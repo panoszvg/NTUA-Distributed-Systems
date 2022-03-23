@@ -29,7 +29,7 @@ def register_node():
         id=node.current_id_count,
         ip=node_data['ip'],
         port=node_data['port'],
-        public_key=node_data['public_key']
+        public_key=jsonpickle.decode(node_data['public_key'])
     )
     if node.current_id_count == config.nodes:
         _thread.start_new_thread(node.initialize_nodes, ())
