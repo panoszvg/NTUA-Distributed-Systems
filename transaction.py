@@ -58,14 +58,18 @@ class Transaction:
         return SHA256.new(transaction_info.encode())
     
     def to_dict(self):
+        signature = self.signature
+        if signature == None:
+            signature = b""
+
         return dict(
-            sender_address = jsonpickle.encode(self.sender_address),
-            receiver_address = jsonpickle.encode(self.receiver_address),
+            sender_address = self.sender_address.decode('utf-8'),
+            receiver_address = self.receiver_address.decode('utf-8'),
             amount = self.amount,
             transaction_id = self.transaction_id,
             transaction_inputs = [item.to_dict() for item in self.transaction_inputs],
             transaction_outputs = [item.to_dict() for item in self.transaction_outputs],
-            signature = self.signature
+            signature = signature.decode('utf-8', 'backslashreplace')
         )
         
 

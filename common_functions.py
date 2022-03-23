@@ -137,12 +137,11 @@ def simulation():
             print("id: " + str(id) + "  --> IP: " + str(node.ring[id]['ip']) + "  --> Port: " + str(node.ring[id]['port']))
             print("amount: " + str(amount))
             print()
-			
-        while not node.lock.acquire(blocking=False):
-            pass
-
-        if DEBUG:
             print("Before acquiring lock in simulation")
+			
+        node.lock.acquire()
+        
+        if DEBUG:
             print("Acquired lock in simulation")
         temp = node.get_transaction_inputs(amount)
         if temp == None:
@@ -170,7 +169,7 @@ def simulation():
         if node.lock.locked():
             node.lock.release()
         if valid_transaction:
-            node.add_transaction_to_block(new_transaction)
+            node.pending_transactions.append(new_transaction)
             node.broadcast_transaction(new_transaction)
     print("Simulation is done")
     timestamp_2 = time.time()
