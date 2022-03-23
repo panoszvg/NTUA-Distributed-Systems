@@ -139,7 +139,8 @@ def simulation():
             print()
             print("Before acquiring lock in simulation")
 			
-        node.lock.acquire()
+        while not node.lock.acquire(blocking=False):
+            pass
         
         if DEBUG:
             print("Acquired lock in simulation")

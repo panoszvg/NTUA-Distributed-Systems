@@ -60,8 +60,7 @@ class Node:
 		while True:
 			while len(self.pending_transactions) == 0:
 				pass
-			while not self.lock.acquire(blocking=False):
-				pass
+			self.lock.acquire(blocking=True)
 			if DEBUG:
 				print("Now processing pending transaction...")
 			try:
@@ -368,10 +367,6 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
-		# in case it's already mining
-		while self.mining:
-			pass
-
 		self.mining = True
 		nonce = randint(0, 2**64)
 		block = self.current_block
