@@ -7,11 +7,17 @@ class Transaction_Input:
     previous_output_id: str
         id of the transaction output where the amount came from
     '''
-    def __init__(self, previous_output_id):
+    def __init__(self, previous_output_id, owner, amount):
         self.previous_output_id = previous_output_id
+        self.owner = owner
+        self.amount = amount
 
     def to_dict(self):
-        return dict(previous_output_id = self.previous_output_id)
+        return dict(
+            previous_output_id = self.previous_output_id,
+            owner=self.owner,
+            amount=self.amount
+        )
 
     
 class Transaction_Output:

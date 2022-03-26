@@ -20,14 +20,19 @@ When all nodes are inserted, bootstrap will use this endpoint to broadcast the r
 '''
 @app.route('/node/initialize', methods=['POST'])
 def receive_ring():
+    print("Received ring")
     node.ring = jsonpickle.decode(request.json['ring'])
     valid_chain = node.validate_chain(jsonpickle.decode(request.json['chain']))
     if valid_chain: 
-        node.chain = jsonpickle.decode(request.json['chain']) # validate before adding
+        node.chain = jsonpickle.decode(request.json['chain'])
+        node.current_block = jsonpickle.decode(request.json['current_block'])
     else:
         print("Problem")
         exit(1)
     node.UTXOs = jsonpickle.decode(request.json['UTXOs'])
+    # copy UTXOs to pending_UTXOs
+    for utxo in node.UTXOs:
+        node.pending_UTXOs.append(copy.deepcopy(utxo))
     node.current_id_count = len(node.UTXOs)
     _thread.start_new_thread(node.worker, ())
     if config.simulation:
@@ -49,6 +54,7 @@ if __name__ == '__main__':
     port = args.port
     node.port = port
     ipv4 = os.popen('ip addr show eth1 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
+    ipv4 = config.bootstrap_ip
     data = {
         'ip': ipv4,
         'port': port,

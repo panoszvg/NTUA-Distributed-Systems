@@ -1,4 +1,6 @@
+from re import L
 from flask import Blueprint, jsonify, request
+from numpy import block
 from block import Block
 from node import Node
 from blockchain import Blockchain
@@ -109,24 +111,28 @@ def client():
 
 
 def simulation():
+    print("Sim #1")
     while node.current_id_count != config.nodes:
         pass
+    print("Sim #2")
 
-    while not (node.get_wallet_balance(0) == 100 \
-    and node.get_wallet_balance(1) == 100 \
-    and node.get_wallet_balance(2) == 100 \
-    and node.get_wallet_balance(3) == 100 \
-    and node.get_wallet_balance(4) == 100):
+    while not (node.get_wallet_balance(0) != 0 \
+    and node.get_wallet_balance(1) != 0 \
+    and node.get_wallet_balance(2) != 0 \
+    and node.get_wallet_balance(3) != 0 \
+    and node.get_wallet_balance(4) != 0):
         pass
 
     if DEBUG:
         print("All wallets have 100 NBCs")
-        print(str(node.get_wallet_balance(0)) + " " + str(node.get_wallet_balance(1)) + " " + str(node.get_wallet_balance(2)) + " " + str(node.get_wallet_balance(3)) + " " + str(node.get_wallet_balance(4)))
+        print(str(node.get_wallet_balance(0, True)) + " " + str(node.get_wallet_balance(1, True)) + " " + str(node.get_wallet_balance(2, True)) + " " + str(node.get_wallet_balance(3, True)) + " " + str(node.get_wallet_balance(4, True)))
 
     timestamp_1 = time.time()
-
-    file = open("transactions/" + str(config.nodes) + "nodes/transactions" + str(node.id) + ".txt", "r")
+    print("Started processing txns")
+    file = open("./" + str(config.nodes) + "nodes/transactions" + str(node.id) + ".txt", "r")
     for line in file:
+        if node.mining:
+            print("Sim-mining")
         while node.mining:
             pass
         id, amount = line.split(" ")
@@ -139,22 +145,29 @@ def simulation():
             print()
             print("Before acquiring lock in simulation")
 			
-        while not node.lock.acquire(blocking=False):
+        while not((node.old_valid_txns == 0) and (node.lock.acquire(blocking=False))):
             pass
-        
+
+        print("Old valid size is: " + str(node.old_valid_txns))
+
         if DEBUG:
             print("Acquired lock in simulation")
         temp = node.get_transaction_inputs(amount)
         if temp == None:
             if DEBUG:
                 print("Wallet doesn't have sufficient funds to make this transaction")
-                print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
+                print("Wallet: " + str(node.get_wallet_balance(node.id, True)) + " NBC")
                 print()
             if node.lock.locked():
                 node.lock.release()
             continue
         
         inputs, inputs_sum = temp
+        y = [x.to_dict() for x in inputs]
+        print("Creating txn with: ")
+        print("amount: " + str(amount))
+        print("inputs: " + str(*y))
+        print("inputs_sum: " + str(inputs_sum))
 
         # create transaction
         new_transaction = node.create_transaction(
@@ -167,11 +180,16 @@ def simulation():
             inputs_sum=inputs_sum
         )
         valid_transaction = node.validate_transaction(new_transaction)
+        if valid_transaction:
+            print("Sim-Valid txn")
+            node.broadcast_transaction(new_transaction)
+            node.add_transaction_to_block(new_transaction)
+            # print("Valid txn and pending txns size is: " + str(len(node.pending_transactions)))
+            # node.pending_transactions.append(new_transaction)
+            # print("After appending: " + str(len(node.pending_transactions)))
+            # _thread.start_new_thread(node.worker, ())
         if node.lock.locked():
             node.lock.release()
-        if valid_transaction:
-            node.pending_transactions.append(new_transaction)
-            node.broadcast_transaction(new_transaction)
     print("Simulation is done")
     timestamp_2 = time.time()
     print("Time spent in simulation: " + str(timestamp_2 - timestamp_1) + " sec.")
@@ -184,17 +202,20 @@ After mining process, when a block is found, it is sent to this endpoint
 '''
 @rest.route('/block/add', methods=['POST'])
 def add_block():
-    node.block_received = True
+    print("Received a block")
     block_received = jsonpickle.decode(request.json['block'])
+    while not node.received_block == None:
+        pass
     correct_block = node.validate_block(block_received)
     if correct_block:
-        node.chain.blocks.append(block_received)
-        node.current_block = Block(block_received.current_hash, block_received.index + 1)
+        node.received_block = block_received
+        node.block_received = True
     else:
         if config.scalable:
             _thread.start_new_thread(node.resolve_conflicts_scalable, ())
         else:
             _thread.start_new_thread(node.resolve_conflicts, ())
+            # node.resolve_conflicts()
     return "OK", 200
 
 
