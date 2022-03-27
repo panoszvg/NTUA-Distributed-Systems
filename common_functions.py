@@ -114,6 +114,9 @@ def simulation():
     while node.current_id_count != config.nodes:
         pass
 
+    while not node.begin_simulation:
+        pass
+
     while not (node.get_wallet_balance(0) != 0 \
     and node.get_wallet_balance(1) != 0 \
     and node.get_wallet_balance(2) != 0 \

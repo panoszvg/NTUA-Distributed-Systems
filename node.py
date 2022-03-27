@@ -56,6 +56,7 @@ class Node:
 		self.mining = False
 		self.pending_transactions = deque()
 		self.lock = threading.Lock()
+		self.begin_simulation = False
 		
 
 	def worker(self):
@@ -317,6 +318,8 @@ class Node:
 				self.add_transaction_to_block(transaction)
 			else:
 				print("WTF") # leave it, because if it comes here there's something seriously wrong :)
+		
+		self.begin_simulation = True
 
 
 	'''
@@ -466,6 +469,10 @@ class Node:
 		#if enough transactions mine
 		while self.mining:
 			pass
+		# was stuck in mining, now about to add previous transaction to new block, must re-validate it
+		# if len(self.current_block.transactions) == 0:
+		# 	# already broadcasted
+		# 	self.validate_transaction(transaction)
 		self.current_block.add_transaction(transaction)
 		if DEBUG:
 			print("Adding txn to block, block now contains " + str(len(self.current_block.transactions)) + " transactions")
@@ -632,6 +639,20 @@ class Node:
 				if item["public_key"] == transaction.sender_address:
 					temp = item["id"]
 			sender_id = temp
+			# add all (both) outputs to UTXOs (if they don't already exist)
+			for output in transaction.transaction_outputs:
+				flag = True
+				node_id = output.recipient
+				for utxo in self.UTXOs[node_id]:
+					if utxo.id == output.id:
+						flag = False
+						break
+				if flag:
+					self.UTXOs[node_id].append(output)
+				else:
+					pass
+					if DEBUG:
+						print("UTXO already exists, not adding it again")
 			# for that sender, find all UTXOs that correspond to the inputs and delete them
 			for input in transaction.transaction_inputs:
 				utxo_to_be_deleted = next((x for x in self.UTXOs[sender_id] if x.id == input.previous_output_id), None)
@@ -647,20 +668,6 @@ class Node:
 					# else:
 					# 	_thread.start_new_thread(self.resolve_conflicts, ())
 					pass
-			# add all (both) outputs to UTXOs (if they don't already exist)
-			for output in transaction.transaction_outputs:
-				flag = True
-				node_id = output.recipient
-				for utxo in self.UTXOs[node_id]:
-					if utxo.id == output.id:
-						flag = False
-						break
-				if flag:
-					self.UTXOs[node_id].append(output)
-				else:
-					pass
-					if DEBUG:
-						print("UTXO already exists, not adding it again")
 
 
 	def revert_UTXOS(self, blocks, received_block=None):
@@ -702,8 +709,6 @@ class Node:
 				print("Wallet doesn't have sufficient funds to make this transaction")
 				print("Wallet: " + str(self.get_wallet_balance(self.id, True)) + " NBC")
 				print()
-				if self.lock.locked():
-					self.lock.release()
 			return
 
 		inputs, inputs_sum = temp

@@ -36,6 +36,7 @@ def receive_ring():
     for utxo in node.UTXOs:
         node.pending_UTXOs.append(copy.deepcopy(utxo))
     node.current_id_count = len(node.UTXOs)
+    node.begin_simulation = True
     if config.simulation:
         _thread.start_new_thread(simulation, ())
     else:
