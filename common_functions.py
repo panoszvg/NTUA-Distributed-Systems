@@ -75,8 +75,8 @@ def client():
             )
             valid_transaction = node.validate_transaction(new_transaction)
             if valid_transaction:
-                node.add_transaction_to_block(new_transaction)
                 node.broadcast_transaction(new_transaction)
+                node.add_transaction_to_block(new_transaction)
             print()
 
         elif cli_input == "view":
@@ -163,11 +163,6 @@ def simulation():
             continue
         
         inputs, inputs_sum = temp
-        y = [x.to_dict() for x in inputs]
-        print("Creating txn with: ")
-        print("amount: " + str(amount))
-        print("inputs: " + str(*y))
-        print("inputs_sum: " + str(inputs_sum))
 
         # create transaction
         new_transaction = node.create_transaction(
@@ -202,8 +197,15 @@ After mining process, when a block is found, it is sent to this endpoint
 '''
 @rest.route('/block/add', methods=['POST'])
 def add_block():
-    print("Received a block")
+    print("Received a block with txns:")
     block_received = jsonpickle.decode(request.json['block'])
+    for transaction in block_received.transactions:
+        for item in node.ring:
+            if item["public_key"] == transaction.sender_address:
+                temp = item["id"]
+        sender_id = temp
+        print("Sender: " + str(sender_id) + ", amount: " + str(transaction.amount))
+    print()
     while not node.received_block == None:
         pass
     correct_block = node.validate_block(block_received)

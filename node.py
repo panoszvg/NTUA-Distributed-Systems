@@ -61,10 +61,31 @@ class Node:
 	def worker(self):
 		while True:
 			while len(self.pending_transactions) == 0:
+				if self.block_received:
+					print("Have received a block while working - trying to lock")
+					while not self.lock.acquire(blocking=False):
+						pass
+					print("Acquired lock in worker")
+					self.process_received_block()
+					self.block_received = False
+					self.mining = False
+					self.received_block = None
+					if self.lock.locked():
+						self.lock.release()
+					continue
 				pass
 			while not self.lock.acquire(blocking=False):
 				pass
 			print("Acquired lock in worker")
+			if self.block_received:
+				print("Have received a block while working - already locked")
+				self.process_received_block()
+				self.block_received = False
+				self.mining = False
+				self.received_block = None
+				if self.lock.locked():
+					self.lock.release()
+				continue
 			try:
 				transaction = self.pending_transactions.popleft()
 			except:
@@ -77,12 +98,17 @@ class Node:
 
 			if transaction.sender_address == self.wallet.public_key:
 				transaction = self.recreate_node_transaction(transaction)
+				self.old_valid_txns -= 1
+			
+			if transaction == None or self.transaction_exists(transaction):
+				if self.lock.locked():
+					self.lock.release()
+				continue
 
 			print("Trying to validate txn in worker")
 			valid_transaction = self.validate_transaction(transaction)
 			if valid_transaction:
 				if transaction.sender_address == self.wallet.public_key:
-					self.old_valid_txns -= 1
 					_thread.start_new_thread(self.broadcast_transaction, (transaction, ))
 				print("Now processing pending transaction...")
 				self.add_transaction_to_block(transaction)
@@ -135,6 +161,38 @@ class Node:
 		for transaction in transactions_obj:
 			transactions.append(transaction.to_dict())
 		return transactions
+
+	def get_transactions_number(self, transaction_id):
+		counter = 0
+		flag = False
+		for block in self.chain.blocks:
+			for transaction in block.transactions:
+				if transaction.transaction_id == transaction_id:
+					flag = True
+					break
+				else:
+					counter += 1
+			if flag:
+				return counter
+		for transaction in self.current_block.transactions:
+			if transaction.transaction_id == transaction_id:
+				flag = True
+				break
+			else:
+				counter += 1
+		return counter
+
+	def transaction_exists(self, transaction):
+		for block in reversed(self.chain.blocks):
+			for txn in reversed(block.transactions):
+				if txn.transaction_id == transaction.transaction_id:
+					print("It already exists, returning")
+					return True
+		for txn in reversed(self.current_block.transactions):
+			if txn.transaction_id == transaction.transaction_id:
+				print("It already exists, returning")
+				return True
+		return False
 
 	'''
 	Get list of Transaction_Input that is needed for a transaction
@@ -562,31 +620,11 @@ class Node:
 
 
 	def revert_UTXOS(self, blocks, received_block=None):
-		# add previous UTXO(s)
-		utxo_amount = 0
-		for block in reversed(blocks):
-			for transaction in reversed(block.transactions):
-				for txn_input in transaction.transaction_inputs:
-					print("++ " + str(txn_input.amount))
-					self.UTXOs[txn_input.owner].append(Transaction_Output(transaction.transaction_id, txn_input.owner, txn_input.amount))
-					utxo_amount += txn_input.amount
-		print("Added utxos: " + str(utxo_amount))
-		utxo_amount = 0
-		# remove current UTXOs
-		for block in reversed(blocks):
-			for transaction in reversed(block.transactions):
-				for txn_output in transaction.transaction_outputs:
-					for x in self.UTXOs[txn_output.recipient]:
-						if x.id == txn_output.id:
-							print("-- " + str(x.amount))
-							utxo_amount += x.amount
-							self.UTXOs[txn_output.recipient].remove(x)
-		print("Removed utxos: " + str(utxo_amount))
-		# add self transactions
 		for block in blocks:
 			for transaction in block.transactions:
 				flag = False
-				if block.index == 1 and block.transactions.index(transaction) < 4: #TODO
+				print("Might want to redo txn with $$" + str(transaction.amount) + "  and tns #" + str(self.get_transactions_number(transaction_id=transaction.transaction_id)))
+				if self.get_transactions_number(transaction_id=transaction.transaction_id) < config.nodes:
 					continue
 				print("Checking txn: " + str(transaction.to_dict()['transaction_id']) + " $" + str(transaction.to_dict()['amount']))
 				if transaction.sender_address == self.wallet.public_key:
@@ -605,7 +643,9 @@ class Node:
 
 
 	def recreate_node_transaction(self, transaction):
-		print("In RECREATE with amount: " + str(transaction.amount))
+		print("In RECREATE with amount: " + str(transaction.amount) + " and id: " + str(transaction.transaction_id))
+		if self.transaction_exists(transaction):
+			return 
 		temp = self.get_transaction_inputs(transaction.amount)
 		if temp == None:
 			if DEBUG:
@@ -620,15 +660,8 @@ class Node:
 
 		id = next((x['id'] for x in self.ring if x['public_key'] == transaction.receiver_address), None)
 
-		# y = [x.to_dict() for x in inputs]
-		# print("Recreating txn with: ")
-		# print("amount: " + str(transaction.amount))
-		# print("inputs: " + str(*y))
-		# print("inputs_sum: " + str(inputs_sum))
-
-
 		# create transaction
-		return self.create_transaction(
+		new_transaction = self.create_transaction(
             sender_ip=self.ip,
             sender_port=self.port,
             receiver_ip=str(self.ring[id]['ip']),
@@ -637,6 +670,8 @@ class Node:
             inputs=inputs,
             inputs_sum=inputs_sum
         )
+		new_transaction.transaction_id = transaction.transaction_id
+		return new_transaction
 
 
 	def resolve_conflicts(self):
