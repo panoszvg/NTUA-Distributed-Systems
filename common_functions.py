@@ -111,10 +111,8 @@ def client():
 
 
 def simulation():
-    print("Sim #1")
     while node.current_id_count != config.nodes:
         pass
-    print("Sim #2")
 
     while not (node.get_wallet_balance(0) != 0 \
     and node.get_wallet_balance(1) != 0 \
@@ -128,11 +126,11 @@ def simulation():
         print(str(node.get_wallet_balance(0, True)) + " " + str(node.get_wallet_balance(1, True)) + " " + str(node.get_wallet_balance(2, True)) + " " + str(node.get_wallet_balance(3, True)) + " " + str(node.get_wallet_balance(4, True)))
 
     timestamp_1 = time.time()
-    print("Started processing txns")
     file = open("./" + str(config.nodes) + "nodes/transactions" + str(node.id) + ".txt", "r")
     for line in file:
         if node.mining:
-            print("Sim-mining")
+            if DEBUG:
+                print("Sim-mining")
         while node.mining:
             pass
         id, amount = line.split(" ")
@@ -148,7 +146,8 @@ def simulation():
         while not((node.old_valid_txns == 0) and (node.lock.acquire(blocking=False))):
             pass
 
-        print("Old valid size is: " + str(node.old_valid_txns))
+        if DEBUG:
+            print("Old valid size is: " + str(node.old_valid_txns))
 
         if DEBUG:
             print("Acquired lock in simulation")
@@ -176,7 +175,8 @@ def simulation():
         )
         valid_transaction = node.validate_transaction(new_transaction)
         if valid_transaction:
-            print("Sim-Valid txn")
+            if DEBUG:
+                print("Sim-Valid txn")
             node.broadcast_transaction(new_transaction)
             node.add_transaction_to_block(new_transaction)
             # print("Valid txn and pending txns size is: " + str(len(node.pending_transactions)))
@@ -197,15 +197,17 @@ After mining process, when a block is found, it is sent to this endpoint
 '''
 @rest.route('/block/add', methods=['POST'])
 def add_block():
-    print("Received a block with txns:")
+    if DEBUG:
+        print("Received a block with txns:")
     block_received = jsonpickle.decode(request.json['block'])
     for transaction in block_received.transactions:
-        for item in node.ring:
-            if item["public_key"] == transaction.sender_address:
-                temp = item["id"]
-        sender_id = temp
-        print("Sender: " + str(sender_id) + ", amount: " + str(transaction.amount))
-    print()
+        if DEBUG:
+            for item in node.ring:
+                if item["public_key"] == transaction.sender_address:
+                    temp = item["id"]
+            sender_id = temp
+            print("Sender: " + str(sender_id) + ", amount: " + str(transaction.amount))
+            print()
     while not node.received_block == None:
         pass
     correct_block = node.validate_block(block_received)

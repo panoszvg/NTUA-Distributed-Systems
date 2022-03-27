@@ -20,9 +20,11 @@ When all nodes are inserted, bootstrap will use this endpoint to broadcast the r
 '''
 @app.route('/node/initialize', methods=['POST'])
 def receive_ring():
-    print("Received ring")
+    if DEBUG:
+        print("Received ring")
     node.ring = jsonpickle.decode(request.json['ring'])
     valid_chain = node.validate_chain(jsonpickle.decode(request.json['chain']))
+    _thread.start_new_thread(node.worker, ())
     if valid_chain: 
         node.chain = jsonpickle.decode(request.json['chain'])
         node.current_block = jsonpickle.decode(request.json['current_block'])
@@ -34,7 +36,6 @@ def receive_ring():
     for utxo in node.UTXOs:
         node.pending_UTXOs.append(copy.deepcopy(utxo))
     node.current_id_count = len(node.UTXOs)
-    _thread.start_new_thread(node.worker, ())
     if config.simulation:
         _thread.start_new_thread(simulation, ())
     else:

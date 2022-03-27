@@ -62,10 +62,12 @@ class Node:
 		while True:
 			while len(self.pending_transactions) == 0:
 				if self.block_received:
-					print("Have received a block while working - trying to lock")
+					if DEBUG:
+						print("Have received a block while working - trying to lock")
 					while not self.lock.acquire(blocking=False):
 						pass
-					print("Acquired lock in worker")
+					if DEBUG:
+						print("Acquired lock in worker")
 					self.process_received_block()
 					self.block_received = False
 					self.mining = False
@@ -76,9 +78,11 @@ class Node:
 				pass
 			while not self.lock.acquire(blocking=False):
 				pass
-			print("Acquired lock in worker")
+			if DEBUG:
+				print("Acquired lock in worker")
 			if self.block_received:
-				print("Have received a block while working - already locked")
+				if DEBUG:
+					print("Have received a block while working - already locked")
 				self.process_received_block()
 				self.block_received = False
 				self.mining = False
@@ -105,15 +109,18 @@ class Node:
 					self.lock.release()
 				continue
 
-			print("Trying to validate txn in worker")
+			if DEBUG:
+				print("Trying to validate txn in worker")
 			valid_transaction = self.validate_transaction(transaction)
 			if valid_transaction:
 				if transaction.sender_address == self.wallet.public_key:
 					_thread.start_new_thread(self.broadcast_transaction, (transaction, ))
-				print("Now processing pending transaction...")
+				if DEBUG:
+					print("Now processing pending transaction...")
 				self.add_transaction_to_block(transaction)
 			else:
-				print("Not valid txn")
+				if DEBUG:
+					print("Not valid txn")
 			if self.lock.locked():
 				self.lock.release()
 
@@ -186,11 +193,13 @@ class Node:
 		for block in reversed(self.chain.blocks):
 			for txn in reversed(block.transactions):
 				if txn.transaction_id == transaction.transaction_id:
-					print("It already exists, returning")
+					if DEBUG:
+						print("It already exists, returning")
 					return True
 		for txn in reversed(self.current_block.transactions):
 			if txn.transaction_id == transaction.transaction_id:
-				print("It already exists, returning")
+				if DEBUG:
+					print("It already exists, returning")
 				return True
 		return False
 
@@ -306,7 +315,7 @@ class Node:
 			if valid_transaction:
 				self.add_transaction_to_block(transaction)
 			else:
-				print("WTF")
+				print("WTF") # leave it, because if it comes here there's something seriously wrong :)
 			self.broadcast_transaction(transaction)
 
 
@@ -353,7 +362,8 @@ class Node:
 						)
 		transaction.transaction_outputs.append(output_sender)
 
-		print("Created output for sender: " + str(output_sender.to_dict()))
+		if DEBUG:
+			print("Created output for sender: " + str(output_sender.to_dict()))
 
 		output_recipient = Transaction_Output(
 			transaction_id=transaction.transaction_id,
@@ -410,12 +420,13 @@ class Node:
 				utxo_to_be_deleted = next((x for x in self.pending_UTXOs[sender_id] if x.id == input.previous_output_id), None)
 				try:
 					if utxo_to_be_deleted == None:
-						print("IT IS NONE")
-						for i in range(0,5):
-							for utxo in self.pending_UTXOs[i]:
-								print(utxo.to_dict())
-						print(str(input.previous_output_id) + " -> '" + str(sender_id) + "' $" + str(input.amount))
-						print("\n")
+						if DEBUG:
+							print("IT IS NONE")
+							for i in range(0,5):
+								for utxo in self.pending_UTXOs[i]:
+									print(utxo.to_dict())
+							print(str(input.previous_output_id) + " -> '" + str(sender_id) + "' $" + str(input.amount))
+							print("\n")
 					self.pending_UTXOs[sender_id].remove(utxo_to_be_deleted)
 				except:
 					return False
@@ -441,12 +452,14 @@ class Node:
 	return None
 	'''
 	def add_transaction_to_block(self, transaction):
-		print("In adding txn to block, with block having txns: " + str(len(self.current_block.transactions)))
+		if DEBUG:
+			print("In adding txn to block, with block having txns: " + str(len(self.current_block.transactions)))
 		#if enough transactions mine
 		while self.mining:
 			pass
 		self.current_block.add_transaction(transaction)
-		print("Adding txn to block, block now contains " + str(len(self.current_block.transactions)) + " transactions")
+		if DEBUG:
+			print("Adding txn to block, block now contains " + str(len(self.current_block.transactions)) + " transactions")
 		if len(self.current_block.transactions) == self.chain.capacity:
 			self.mine_block()
 		if self.lock.locked():
@@ -471,11 +484,12 @@ class Node:
 		for utxo in self.UTXOs:
 			self.pending_UTXOs.append(copy.deepcopy(utxo))
 
-		print("NEW UTXOS")
-		for i in range(0,5):
-			for utxo in self.pending_UTXOs[i]:
-				print(utxo.to_dict())
-		print("\n")
+		if DEBUG:
+			print("NEW UTXOS")
+			for i in range(0,5):
+				for utxo in self.pending_UTXOs[i]:
+					print(utxo.to_dict())
+			print("\n")
 
 	'''
 	Mines a block: searches for the right nonce, and when it
@@ -484,7 +498,8 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
-		print("In mining")
+		if DEBUG:
+			print("In mining")
 		self.mining = True
 		nonce = randint(0, 2**64)
 		block = self.current_block
@@ -508,7 +523,8 @@ class Node:
 
 			nonce = (nonce + 1) % (2**64)
 
-		print("FOUND SOLUTION with hash: " + str(block.current_hash))
+		if DEBUG:
+			print("FOUND SOLUTION with hash: " + str(block.current_hash))
 		block.index = len(self.chain.blocks)
 		self.chain.blocks.append(block)
 		self.current_block = Block(block.current_hash, block.index + 1)
@@ -516,11 +532,12 @@ class Node:
 		self.UTXOs = []
 		for utxo in self.pending_UTXOs:
 			self.UTXOs.append(copy.deepcopy(utxo))
-		print("NEW UTXOS")
-		for i in range(0,5):
-			for utxo in self.pending_UTXOs[i]:
-				print(utxo.to_dict())
-		print("\n")
+		if DEBUG:
+			print("NEW UTXOS")
+			for i in range(0,5):
+				for utxo in self.pending_UTXOs[i]:
+					print(utxo.to_dict())
+			print("\n")
 
 		if self.lock.locked():
 			self.lock.release()
@@ -561,8 +578,9 @@ class Node:
 	def validate_block(self, block, previous_block=None):
 		if previous_block == None:
 			previous_block = self.chain.blocks[-1]
-		print("Previous block's hash: " + str(previous_block.current_hash))
-		print("Current block's phash: " + str(block.previous_hash))
+		if DEBUG:
+			print("Previous block's hash: " + str(previous_block.current_hash))
+			print("Current block's phash: " + str(block.previous_hash))
 		if block.previous_hash == previous_block.current_hash and block.current_hash.startswith('0'*config.difficulty):
 			return True
 		return False
@@ -623,27 +641,33 @@ class Node:
 		for block in blocks:
 			for transaction in block.transactions:
 				flag = False
-				print("Might want to redo txn with $$" + str(transaction.amount) + "  and tns #" + str(self.get_transactions_number(transaction_id=transaction.transaction_id)))
+				if DEBUG:
+					print("Might want to redo txn with $$" + str(transaction.amount) + "  and tns #" + str(self.get_transactions_number(transaction_id=transaction.transaction_id)))
 				if self.get_transactions_number(transaction_id=transaction.transaction_id) < config.nodes:
 					continue
-				print("Checking txn: " + str(transaction.to_dict()['transaction_id']) + " $" + str(transaction.to_dict()['amount']))
+				if DEBUG:
+					print("Checking txn: " + str(transaction.to_dict()['transaction_id']) + " $" + str(transaction.to_dict()['amount']))
 				if transaction.sender_address == self.wallet.public_key:
 					for incoming_txn in received_block.transactions:
-						print("   with txn: " + str(incoming_txn.to_dict()['transaction_id']) + " $" + str(incoming_txn.to_dict()['amount']))
+						if DEBUG:
+							print("   with txn: " + str(incoming_txn.to_dict()['transaction_id']) + " $" + str(incoming_txn.to_dict()['amount']))
 						if incoming_txn.transaction_id == transaction.transaction_id:
 							flag = True
 							break
 					if flag:
-						print("Not recreating txn with amount: "+ str(transaction.amount) +", since it exists in incoming block :)")
+						if DEBUG:
+							print("Not recreating txn with amount: "+ str(transaction.amount) +", since it exists in incoming block :)")
 						continue
 					else:
-						print("Recreating transaction " + str(transaction.to_dict()['amount']))
+						if DEBUG:
+							print("Recreating transaction " + str(transaction.to_dict()['amount']))
 						self.old_valid_txns += 1
 						self.pending_transactions.append(transaction)
 
 
 	def recreate_node_transaction(self, transaction):
-		print("In RECREATE with amount: " + str(transaction.amount) + " and id: " + str(transaction.transaction_id))
+		if DEBUG:
+			print("In RECREATE with amount: " + str(transaction.amount) + " and id: " + str(transaction.transaction_id))
 		if self.transaction_exists(transaction):
 			return 
 		temp = self.get_transaction_inputs(transaction.amount)
