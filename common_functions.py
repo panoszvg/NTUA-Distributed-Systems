@@ -200,14 +200,17 @@ def add_block():
     if DEBUG:
         print("Received a block with txns:")
     block_received = jsonpickle.decode(request.json['block'])
-    for transaction in block_received.transactions:
-        if DEBUG:
+    if DEBUG:
+        for transaction in block_received.transactions:
+            sender_id = None
+            receiver_id = None
             for item in node.ring:
                 if item["public_key"] == transaction.sender_address:
-                    temp = item["id"]
-            sender_id = temp
-            print("Sender: " + str(sender_id) + ", amount: " + str(transaction.amount))
-            print()
+                    sender_id = item["id"]
+                if item["public_key"] == transaction.receiver_address:
+                    receiver_id = item["id"]
+            print("Sender: " + str(sender_id) + ", Receiver: " + str(receiver_id) + ", amount: " + str(transaction.amount))
+        print()
     while not node.received_block == None:
         pass
     correct_block = node.validate_block(block_received)

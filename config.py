@@ -1,5 +1,5 @@
 nodes=5
-capacity=5
+capacity=4
 difficulty=4
 simulation=True
 scalable=False

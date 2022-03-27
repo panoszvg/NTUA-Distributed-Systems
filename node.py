@@ -114,7 +114,7 @@ class Node:
 			valid_transaction = self.validate_transaction(transaction)
 			if valid_transaction:
 				if transaction.sender_address == self.wallet.public_key:
-					_thread.start_new_thread(self.broadcast_transaction, (transaction, ))
+					self.broadcast_transaction(transaction)
 				if DEBUG:
 					print("Now processing pending transaction...")
 				self.add_transaction_to_block(transaction)
@@ -312,11 +312,11 @@ class Node:
 				inputs_sum=inputs_sum
 			)
 			valid_transaction = self.validate_transaction(transaction) # otherwise do manually
+			self.broadcast_transaction(transaction)
 			if valid_transaction:
 				self.add_transaction_to_block(transaction)
 			else:
 				print("WTF") # leave it, because if it comes here there's something seriously wrong :)
-			self.broadcast_transaction(transaction)
 
 
 	'''
@@ -647,10 +647,20 @@ class Node:
 					# else:
 					# 	_thread.start_new_thread(self.resolve_conflicts, ())
 					pass
-			# add all (both) outputs to UTXOs
+			# add all (both) outputs to UTXOs (if they don't already exist)
 			for output in transaction.transaction_outputs:
+				flag = True
 				node_id = output.recipient
-				self.UTXOs[node_id].append(output)
+				for utxo in self.UTXOs[node_id]:
+					if utxo.id == output.id:
+						flag = False
+						break
+				if flag:
+					self.UTXOs[node_id].append(output)
+				else:
+					pass
+					if DEBUG:
+						print("UTXO already exists, not adding it again")
 
 
 	def revert_UTXOS(self, blocks, received_block=None):
