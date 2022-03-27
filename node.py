@@ -454,6 +454,15 @@ class Node:
 	def add_transaction_to_block(self, transaction):
 		if DEBUG:
 			print("In adding txn to block, with block having txns: " + str(len(self.current_block.transactions)))
+			sender_id = None
+			receiver_id = None
+			for item in self.ring:
+				if item["public_key"] == transaction.sender_address:
+					sender_id = item["id"]
+				if item["public_key"] == transaction.receiver_address:
+					receiver_id = item["id"]
+			print("TXN => Sender: " + str(sender_id) + ", Receiver: " + str(receiver_id) + ", amount: " + str(transaction.amount))
+
 		#if enough transactions mine
 		while self.mining:
 			pass
@@ -505,6 +514,7 @@ class Node:
 		block = self.current_block
 		if block.previous_hash == -1 or 1:
 			block.previous_hash = self.chain.blocks[-1].current_hash
+		block.index = len(self.chain.blocks)
 		while (True):
 			if self.block_received:
 				self.process_received_block()
@@ -525,13 +535,19 @@ class Node:
 
 		if DEBUG:
 			print("FOUND SOLUTION with hash: " + str(block.current_hash))
-		block.index = len(self.chain.blocks)
 		self.chain.blocks.append(block)
 		self.current_block = Block(block.current_hash, block.index + 1)
 		# change UTXOs
 		self.UTXOs = []
 		for utxo in self.pending_UTXOs:
 			self.UTXOs.append(copy.deepcopy(utxo))
+
+		# remove all pending transactions of other nodes, since they
+		# will be recreated - keep current node's since they're recreations
+		for txn in self.pending_transactions.copy():
+			if txn.sender_address != self.wallet.public_key:
+				self.pending_transactions.remove(txn)
+
 		if DEBUG:
 			print("NEW UTXOS")
 			for i in range(0,5):
