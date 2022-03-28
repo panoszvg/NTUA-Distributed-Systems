@@ -57,6 +57,8 @@ class Node:
 		self.pending_transactions = deque()
 		self.lock = threading.Lock()
 		self.begin_simulation = False
+		self.received_UTXOs = None
+		self.simulation_start_time = None
 		
 
 	def worker(self):
@@ -69,6 +71,9 @@ class Node:
 						pass
 					if DEBUG:
 						print("Acquired lock in worker")
+					if self.received_block == None and self.lock.locked():
+						self.lock.release()
+						continue
 					self.process_received_block()
 					self.block_received = False
 					self.mining = False
@@ -79,6 +84,7 @@ class Node:
 				pass
 			while not self.lock.acquire(blocking=False):
 				pass
+			# self.lock.acquire()
 			if DEBUG:
 				print("Acquired lock in worker")
 			if self.block_received:
@@ -101,6 +107,11 @@ class Node:
 					self.lock.release()
 				continue
 
+			if transaction == None or self.transaction_exists(transaction):
+				if self.lock.locked():
+					self.lock.release()
+				continue
+
 			if transaction.sender_address == self.wallet.public_key:
 				transaction = self.recreate_node_transaction(transaction)
 				self.old_valid_txns -= 1
@@ -112,6 +123,8 @@ class Node:
 
 			if DEBUG:
 				print("Trying to validate txn in worker")
+			while self.mining:
+				pass
 			valid_transaction = self.validate_transaction(transaction)
 			if valid_transaction:
 				if transaction.sender_address == self.wallet.public_key:
@@ -302,6 +315,10 @@ class Node:
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
+
+			while self.mining:
+				pass
+
 			inputs, inputs_sum = self.get_transaction_inputs(100) # no need to check if it returns None, it's always correct
 			transaction = self.create_transaction(
 				sender_ip=self.ring[self.id]['ip'],
@@ -314,6 +331,7 @@ class Node:
 			)
 			valid_transaction = self.validate_transaction(transaction) # otherwise do manually
 			self.broadcast_transaction(transaction)
+			# self.broadcast_transaction(transaction)
 			if valid_transaction:
 				self.add_transaction_to_block(transaction)
 			else:
@@ -484,13 +502,19 @@ class Node:
 
 
 	def process_received_block(self):
-		while self.received_block == None:
+		while self.received_block == None and self.received_UTXOs == None:
 			pass
 
 		# add new UTXOs
-		if self.received_block.index == len(self.chain.blocks):
-			self.revert_UTXOS([self.current_block], self.received_block)
+		# if self.received_block.index == len(self.chain.blocks):
+		self.revert_UTXOS([self.current_block], self.received_block)
 		self.add_UTXOS(self.received_block)
+
+		for txn in self.received_block.transactions:
+			for pending_txn in self.pending_transactions.copy():
+				if txn.transaction_id == pending_txn.transaction_id and txn.sender_address == self.wallet.public_key:
+					self.pending_transactions.remove(pending_txn)
+
 		# handle blocks
 		self.chain.blocks.append(self.received_block)
 		self.current_block = Block(self.received_block.current_hash, self.received_block.index + 1)
@@ -505,7 +529,17 @@ class Node:
 			for i in range(0,5):
 				for utxo in self.pending_UTXOs[i]:
 					print(utxo.to_dict())
-			print("\n")
+			print()
+
+		if config.simulation:
+			if self.simulation_start_time != None:
+				print("Block received at: " + str(time.time() - self.simulation_start_time) +" sec.")
+			else:
+				print("Block received at: " + str(time.time()))
+			print("New Balances:")
+			for i in range(0, config.nodes):
+				print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
+			print()
 
 	'''
 	Mines a block: searches for the right nonce, and when it
@@ -527,6 +561,7 @@ class Node:
 				self.process_received_block()
 				self.block_received = False
 				self.mining = False
+				self.received_UTXOs = None
 				self.received_block = None
 				if self.lock.locked():
 					self.lock.release()
@@ -535,13 +570,26 @@ class Node:
 			block.current_hash = block.myHash()
 
 			if block.current_hash.startswith('0' * config.difficulty):
-				self.mining = False
 				break
 
 			nonce = (nonce + 1) % (2**64)
 
 		if DEBUG:
 			print("FOUND SOLUTION with hash: " + str(block.current_hash))
+			for transaction in block.transactions:
+				sender_id = None
+				receiver_id = None
+				for item in self.ring:
+					if item["public_key"] == transaction.sender_address:
+						sender_id = item["id"]
+					if item["public_key"] == transaction.receiver_address:
+						receiver_id = item["id"]
+				print("Sender: " + str(sender_id) + ", Receiver: " + str(receiver_id) + ", amount: " + str(transaction.amount))
+				for t_input in transaction.transaction_inputs:
+					print("\tInput: { Owner" + str(t_input.owner) + ", Amount: " + str(t_input.amount) + " }")
+				for t_output in transaction.transaction_outputs:
+					print("\tOutput: { Recipient: " + str(t_output.recipient) + ", Amount: " + str(t_output.amount) + " }")
+			print()
 		self.chain.blocks.append(block)
 		self.current_block = Block(block.current_hash, block.index + 1)
 		# change UTXOs
@@ -560,8 +608,23 @@ class Node:
 			for i in range(0,5):
 				for utxo in self.pending_UTXOs[i]:
 					print(utxo.to_dict())
-			print("\n")
+			print()
+			# print("Balances:")
+			# for i in range(0, config.nodes):
+			# 	print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
+			# print("\n")
 
+		if config.simulation:
+			if self.simulation_start_time != None:
+				print("Block mined at: " + str(time.time() - self.simulation_start_time) +" sec.")
+			else:
+				print("Block mined at: " + str(time.time()))
+			print("New Balances:")
+			for i in range(0, config.nodes):
+				print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
+			print()
+
+		self.mining = False
 		if self.lock.locked():
 			self.lock.release()
 		self.broadcast_block(block)
@@ -581,7 +644,7 @@ class Node:
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
-			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(copy.deepcopy(block)) })
+			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(copy.deepcopy(block)), 'UTXOs': jsonpickle.encode(copy.deepcopy(self.UTXOs)) })
 
 
 		
@@ -639,20 +702,6 @@ class Node:
 				if item["public_key"] == transaction.sender_address:
 					temp = item["id"]
 			sender_id = temp
-			# add all (both) outputs to UTXOs (if they don't already exist)
-			for output in transaction.transaction_outputs:
-				flag = True
-				node_id = output.recipient
-				for utxo in self.UTXOs[node_id]:
-					if utxo.id == output.id:
-						flag = False
-						break
-				if flag:
-					self.UTXOs[node_id].append(output)
-				else:
-					pass
-					if DEBUG:
-						print("UTXO already exists, not adding it again")
 			# for that sender, find all UTXOs that correspond to the inputs and delete them
 			for input in transaction.transaction_inputs:
 				utxo_to_be_deleted = next((x for x in self.UTXOs[sender_id] if x.id == input.previous_output_id), None)
@@ -668,9 +717,24 @@ class Node:
 					# else:
 					# 	_thread.start_new_thread(self.resolve_conflicts, ())
 					pass
+			# add all (both) outputs to UTXOs (if they don't already exist)
+			for output in transaction.transaction_outputs:
+				flag = True
+				node_id = output.recipient
+				for utxo in self.UTXOs[node_id]:
+					if utxo.id == output.id:
+						flag = False
+						break
+				if flag:
+					self.UTXOs[node_id].append(output)
+				else:
+					pass
+					if DEBUG:
+						print("UTXO already exists, not adding it again")
 
 
 	def revert_UTXOS(self, blocks, received_block=None):
+		txns_to_recreate = []
 		for block in blocks:
 			for transaction in block.transactions:
 				flag = False
@@ -695,7 +759,18 @@ class Node:
 						if DEBUG:
 							print("Recreating transaction " + str(transaction.to_dict()['amount']))
 						self.old_valid_txns += 1
-						self.pending_transactions.append(transaction)
+						# self.pending_transactions.append(transaction)
+						txns_to_recreate.append(transaction)
+
+		first_node_txn = next((x for x in self.pending_transactions if x.sender_address == self.wallet.public_key), None)
+		if first_node_txn != None:
+			idx = self.pending_transactions.index(first_node_txn)
+			for txn_to_recreate in reversed(txns_to_recreate):
+				self.pending_transactions.insert(idx, txn_to_recreate)
+		else:
+			for txn_to_recreate in reversed(txns_to_recreate):
+				self.pending_transactions.append(txn_to_recreate)
+
 
 
 	def recreate_node_transaction(self, transaction):
@@ -729,6 +804,59 @@ class Node:
 		return new_transaction
 
 
+	def undo_UTXOs(self, blocks, blocks_received):
+		# add previous UTXO(s)
+		utxo_amount = 0
+		for block in reversed(blocks):
+			for transaction in reversed(block.transactions):
+				for txn_input in transaction.transaction_inputs:
+					print("++ " + str(txn_input.amount))
+					self.UTXOs[txn_input.owner].append(Transaction_Output(transaction.transaction_id, txn_input.owner, txn_input.amount))
+					utxo_amount += txn_input.amount
+		print("Added utxos: " + str(utxo_amount))
+		utxo_amount = 0
+		# remove current UTXOs
+		for block in reversed(blocks):
+			for transaction in reversed(block.transactions):
+				for txn_output in transaction.transaction_outputs:
+					for x in self.UTXOs[txn_output.recipient]:
+						if x.id == txn_output.id:
+							print("-- " + str(x.amount))
+							utxo_amount += x.amount
+							self.UTXOs[txn_output.recipient].remove(x)
+		print("Removed utxos: " + str(utxo_amount))
+
+		# recreate transactions
+		for block in blocks:
+			for transaction in block.transactions:
+				flag = False
+				if DEBUG:
+					print("Might want to redo txn with $$" + str(transaction.amount) + "  and tns #" + str(self.get_transactions_number(transaction_id=transaction.transaction_id)))
+				if self.get_transactions_number(transaction_id=transaction.transaction_id) < config.nodes:
+					continue
+				if DEBUG:
+					print("Checking txn: " + str(transaction.to_dict()['transaction_id']) + " $" + str(transaction.to_dict()['amount']))
+				if transaction.sender_address == self.wallet.public_key:
+					for received_block in blocks_received:
+						for incoming_txn in received_block.transactions:
+							if DEBUG:
+								print("   with txn: " + str(incoming_txn.to_dict()['transaction_id']) + " $" + str(incoming_txn.to_dict()['amount']))
+							if incoming_txn.transaction_id == transaction.transaction_id:
+								flag = True
+								break
+						if flag:
+							break
+					if flag:
+						if DEBUG:
+							print("Not recreating txn with amount: "+ str(transaction.amount) +", since it exists in incoming block :)")
+						continue
+					else:
+						if DEBUG:
+							print("Recreating transaction " + str(transaction.to_dict()['amount']))
+						self.old_valid_txns += 1
+						self.pending_transactions.append(transaction)
+
+
 	def resolve_conflicts(self):
 		print("In Resolving Conflicts")
 		#resolve correct chain
@@ -750,15 +878,15 @@ class Node:
 		while not self.lock.acquire(blocking=False):
 			pass
 		# self.chain = jsonpickle.decode(max_info['chain'])
-		# self.current_block = jsonpickle.decode(max_info['current_block'])
+		self.current_block = jsonpickle.decode(max_info['current_block'])
 		incoming_chain = jsonpickle.decode(max_info['chain'])
-		if self.validate_chain(incoming_chain):
-			pass
-		else:
-			print("CHAIN RECEIVED IS NOT VALID")
-			if self.lock.locked():
-				self.lock.release()
-			return
+		# if self.validate_chain(incoming_chain):
+		# 	pass
+		# else:
+		# 	print("CHAIN RECEIVED IS NOT VALID")
+		# 	if self.lock.locked():
+		# 		self.lock.release()
+		# 	return
 		
 		# decide how many current blocks to revert
 		blocks_to_add = 0
@@ -793,14 +921,18 @@ class Node:
 
 		if blocks_to_add == 0:
 			print("Exiting cause I got no changes to do")
+			self.received_block = None
+			self.block_received = False
 			if self.lock.locked():
 				self.lock.release()
 			return
 
-		self.revert_UTXOS(self.chain.blocks[old_block_index+1:])
+		# self.undo_UTXOS(self.chain.blocks[old_block_index+1:], incoming_chain.blocks[-blocks_to_add:])
 
-		for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
-			self.add_UTXOS(incoming_block)
+		# for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
+		# 	self.add_UTXOS(incoming_block)
+
+		self.UTXOs = jsonpickle.decode(max_info['UTXOs'])
 
 		print("\nCurrent chain to keep:")
 		for block in self.chain.blocks[:old_block_index+1]:

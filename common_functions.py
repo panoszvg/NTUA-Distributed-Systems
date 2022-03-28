@@ -129,6 +129,7 @@ def simulation():
         print(str(node.get_wallet_balance(0, True)) + " " + str(node.get_wallet_balance(1, True)) + " " + str(node.get_wallet_balance(2, True)) + " " + str(node.get_wallet_balance(3, True)) + " " + str(node.get_wallet_balance(4, True)))
 
     timestamp_1 = time.time()
+    node.simulation_start_time = timestamp_1
     file = open("./" + str(config.nodes) + "nodes/transactions" + str(node.id) + ".txt", "r")
     for line in file:
         if node.mining:
@@ -146,7 +147,10 @@ def simulation():
             print()
             print("Before acquiring lock in simulation")
 			
-        while not((node.old_valid_txns == 0) and (node.lock.acquire(blocking=False))):
+        # while not((node.old_valid_txns == 0) and (node.lock.acquire(blocking=False))):
+        #     pass
+
+        while not((len(node.pending_transactions) < config.capacity) and (node.lock.acquire(blocking=False))):
             pass
 
         if DEBUG:
@@ -176,12 +180,15 @@ def simulation():
             inputs=inputs,
             inputs_sum=inputs_sum
         )
-        valid_transaction = node.validate_transaction(new_transaction)
-        if valid_transaction:
-            if DEBUG:
-                print("Sim-Valid txn")
-            node.broadcast_transaction(new_transaction)
-            node.add_transaction_to_block(new_transaction)
+        # while node.mining:
+        #     pass
+        node.pending_transactions.append(new_transaction)
+        # valid_transaction = node.validate_transaction(new_transaction)
+        # if valid_transaction:
+        #     if DEBUG:
+        #         print("Sim-Valid txn")
+        #     node.broadcast_transaction(new_transaction)
+        #     node.add_transaction_to_block(new_transaction)
             # print("Valid txn and pending txns size is: " + str(len(node.pending_transactions)))
             # node.pending_transactions.append(new_transaction)
             # print("After appending: " + str(len(node.pending_transactions)))
@@ -213,12 +220,17 @@ def add_block():
                 if item["public_key"] == transaction.receiver_address:
                     receiver_id = item["id"]
             print("Sender: " + str(sender_id) + ", Receiver: " + str(receiver_id) + ", amount: " + str(transaction.amount))
+            for t_input in transaction.transaction_inputs:
+                print("\tInput: { Owner: " + str(t_input.owner) + ", Amount: " + str(t_input.amount) + " }")
+            for t_output in transaction.transaction_outputs:
+                print("\tOutput: { Recipient: " + str(t_output.recipient) + ", Amount: " + str(t_output.amount) + " }")
         print()
-    while not node.received_block == None:
+    while node.block_received:
         pass
     correct_block = node.validate_block(block_received)
     if correct_block:
         node.received_block = block_received
+        node.received_UTXOs = jsonpickle.decode(request.json['UTXOs'])
         node.block_received = True
     else:
         if config.scalable:
@@ -289,6 +301,7 @@ Endpoint used when resolving conflicts, give chain (and other info) to update no
 def get_chain_last(blocks):
     response = {
         'blocks': jsonpickle.encode(copy.deepcopy(node.chain.blocks[-int(blocks):])),
-        'current_block': jsonpickle.encode(node.current_block)
+        'current_block': jsonpickle.encode(node.current_block),
+        'UTXOs': jsonpickle.decode(node.UTXOs)
     }
     return jsonify(response), 200

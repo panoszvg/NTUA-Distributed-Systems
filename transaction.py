@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, utils
-import json
+import json, time
 
 import jsonpickle
 
@@ -53,7 +53,8 @@ class Transaction:
             sender_address = jsonpickle.encode(self.sender_address),
             receiver_address = jsonpickle.encode(self.receiver_address),
             amount = self.amount,
-            transaction_inputs = [item.to_dict() for item in self.transaction_inputs]
+            transaction_inputs = [item.to_dict() for item in self.transaction_inputs],
+            time=time.time()
         ))
         return SHA256.new(transaction_info.encode())
     
