@@ -895,8 +895,6 @@ class Node:
 	Function to undo 'correct' UTXOs that have been added to chain but ultimately are in wrong branch of chain.
 	Basiscally, undo all transactions (going backwards) by re-creating all the UTXOs that are inputs and remove
 	all the UTXOs that are outputs (since when adding them the reverse happens; inputs are removed and outputs are added).
-	After undoing the transactions in the wrong blocks, add back to pending_transactions the transactions that are
-	made by current node but do not exists in incoming blocks to be added.  
 
 	Parameters:
 	-----------
@@ -926,36 +924,6 @@ class Node:
 							utxo_amount += x.amount
 							self.UTXOs[txn_output.recipient].remove(x)
 		print("Removed utxos: " + str(utxo_amount))
-
-		# recreate transactions - basically reinsert_transactions, but also 
-		# written here since it involves multiple blocks both in undoing and checking
-		for block in blocks:
-			for transaction in block.transactions:
-				flag = False
-				if DEBUG:
-					print("Might want to redo txn with $$" + str(transaction.amount) + "  and tns #" + str(self.get_transactions_number(transaction_id=transaction.transaction_id)))
-				if self.get_transactions_number(transaction_id=transaction.transaction_id) < config.nodes:
-					continue
-				if DEBUG:
-					print("Checking txn: " + str(transaction.to_dict()['transaction_id']) + " $" + str(transaction.to_dict()['amount']))
-				if transaction.sender_address == self.wallet.public_key:
-					for block_received in blocks_received:
-						for incoming_txn in block_received.transactions:
-							if DEBUG:
-								print("   with txn: " + str(incoming_txn.to_dict()['transaction_id']) + " $" + str(incoming_txn.to_dict()['amount']))
-							if incoming_txn.transaction_id == transaction.transaction_id:
-								flag = True
-								break
-						if flag:
-							break
-					if flag:
-						if DEBUG:
-							print("Not recreating txn with amount: "+ str(transaction.amount) +", since it exists in incoming block :)")
-						continue
-					else:
-						if DEBUG:
-							print("Recreating transaction " + str(transaction.to_dict()['amount']))
-						self.pending_transactions.append(transaction)
 
 
 	'''
@@ -1040,6 +1008,19 @@ class Node:
 		# perform transactions that exist in the right part of incoming chain
 		for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
 			self.add_UTXOS(incoming_block)
+
+		# create temporary block that holds all incoming correct transactions
+		temp_block = copy.deepcopy(incoming_chain.blocks[-blocks_to_add])
+		for incoming_block in incoming_chain.blocks[-blocks_to_add+1:]:
+			for incoming_txn in incoming_block.transactions:
+				temp_block.transactions.append(incoming_txn)
+
+		# re-add transactions from non-valid part of chain (that also don't exist in incoming
+		# chain and therefore haven't been processed yet) to pending_transactions
+		for nonvalid_block in self.chain.blocks[old_block_index+1:]:
+			for nonvalid_txn in nonvalid_block.transactions:
+				if nonvalid_txn.transaction_id not in temp_block.transactions:
+					self.pending_transactions.appendleft(nonvalid_txn)
 
 		print("\nCurrent chain to keep:")
 		for block in self.chain.blocks[:old_block_index+1]:
