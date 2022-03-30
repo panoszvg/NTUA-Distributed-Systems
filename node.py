@@ -79,6 +79,7 @@ class Node:
 		self.begin_working = False
 		self.simulation_start_time = None
 		self.resolving_conflicts = False
+		self.lock2 = threading.Lock()
 		
 
 	'''
@@ -592,13 +593,13 @@ class Node:
 				print("Block received at: " + str(time.time() - self.simulation_start_time) +" sec.")
 			else:
 				print("Block received at: " + str(time.time()))
-			print("New Balances:")
-			for i in range(0, config.nodes):
-				print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
-			print("Current chain (last 5):")
-			for block in self.chain.blocks[-5:]:
-				print(str(block.index) + ": " + str(block.current_hash))
-			print()
+			# print("New Balances:")
+			# for i in range(0, config.nodes):
+			# 	print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
+			# print("Current chain (last 5):")
+			# for block in self.chain.blocks[-5:]:
+			# 	print(str(block.index) + ": " + str(block.current_hash))
+			# print()
 
 	'''
 	Mines a block: searches for the right nonce, and when it
@@ -609,7 +610,11 @@ class Node:
 	'''
 	def mine_block(self):
 		# if DEBUG:
-		print("In mining")
+		# print("In mining")
+		if self.simulation_start_time != None:
+			print("Started mining at: " + str(time.time() - self.simulation_start_time) +" sec.")
+		else:
+			print("Started mining at: " + str(time.time()))
 		self.mining = True
 		nonce = randint(0, 2**64)
 		block = self.current_block
@@ -649,43 +654,51 @@ class Node:
 				for t_output in transaction.transaction_outputs:
 					print("\tOutput: { Recipient: " + str(t_output.recipient) + ", Amount: " + str(t_output.amount) + " }")
 			print()
-		self.chain.blocks.append(block)
-		self.current_block = Block(block.current_hash, block.index + 1)
-		# change UTXOs
-		self.UTXOs = []
-		for utxo in self.pending_UTXOs:
-			self.UTXOs.append(copy.deepcopy(utxo))
 
-		# remove all pending transactions of other nodes, since they
-		# will be recreated - keep current node's since they're recreations
-		for txn in self.pending_transactions.copy():
-			if txn.sender_address != self.wallet.public_key:
-				self.pending_transactions.remove(txn)
+		
+		if self.broadcast_block(block):
 
-		if DEBUG:
-			print("NEW UTXOS")
-			for i in range(0,config.nodes):
-				for utxo in self.pending_UTXOs[i]:
-					print(utxo.to_dict())
-			print()
+			self.chain.blocks.append(block)
+			self.current_block = Block(block.current_hash, block.index + 1)
+			# change UTXOs
+			self.UTXOs = []
+			for utxo in self.pending_UTXOs:
+				self.UTXOs.append(copy.deepcopy(utxo))
 
-		if config.simulation:
-			if self.simulation_start_time != None:
-				print("Block mined at: " + str(time.time() - self.simulation_start_time) +" sec.")
-			else:
-				print("Block mined at: " + str(time.time()))
-			print("New Balances:")
-			for i in range(0, config.nodes):
-				print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
-			print("Current chain (last 5):")
-			for block in self.chain.blocks[-5:]:
-				print(str(block.index) + ": " + str(block.current_hash))
-			print()
+			# remove all pending transactions of other nodes, since they
+			# will be recreated - keep current node's since they're recreations
+			for txn in self.pending_transactions.copy():
+				if txn.sender_address != self.wallet.public_key:
+					self.pending_transactions.remove(txn)
 
-		self.mining = False
+			if DEBUG:
+				print("NEW UTXOS")
+				for i in range(0,config.nodes):
+					for utxo in self.pending_UTXOs[i]:
+						print(utxo.to_dict())
+				print()
+
+			if config.simulation:
+				if self.simulation_start_time != None:
+					print("Block mined at: " + str(time.time() - self.simulation_start_time) +" sec.")
+				else:
+					print("Block mined at: " + str(time.time()))
+				# print("New Balances:")
+				# for i in range(0, config.nodes):
+				# 	print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
+				# print("Current chain (last 5):")
+				# for block in self.chain.blocks[-5:]:
+				# 	print(str(block.index) + ": " + str(block.current_hash))
+				# print()
+
+			self.mining = False
+		else:
+			self.process_block_received()
+			self.received_block = False
+			self.mining = False
+			self.block_received = None
 		if self.lock.locked():
 			self.lock.release()
-		self.broadcast_block(block)
 
 
 	'''
@@ -702,8 +715,10 @@ class Node:
 		for node in self.ring:
 			if node['id'] == self.id:
 				continue
-			requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(copy.deepcopy(block)), 'UTXOs': jsonpickle.encode(copy.deepcopy(self.UTXOs)) })
-
+			req = requests.post("http://" + node['ip'] + ":" + str(node['port']) + "/block/add", json={ 'block' : jsonpickle.encode(copy.deepcopy(block)), 'UTXOs': jsonpickle.encode(copy.deepcopy(self.UTXOs)) })
+			if (not req.status_code == 200):
+				return False
+		return True
 
 		
 	'''

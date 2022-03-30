@@ -184,17 +184,24 @@ def add_block():
             for t_output in transaction.transaction_outputs:
                 print("\tOutput: { Recipient: " + str(t_output.recipient) + ", Amount: " + str(t_output.amount) + " }")
         print()
-    print("Incoming block with hash: " + str(block_received.current_hash))
-    print("Prev: " + str(block_received.previous_hash))
-    print("Curr: " + str(node.chain.blocks[-1].current_hash))
+    # print("Incoming block with hash: " + str(block_received.current_hash))
+    # print("Prev: " + str(block_received.previous_hash))
+    # print("Curr: " + str(node.chain.blocks[-1].current_hash))
     while node.received_block:
+        pass
+    while not node.lock2.acquire(blocking=False):
         pass
     node.received_block = True
     correct_block = node.validate_block(block_received)
     if correct_block:
         node.block_received = block_received
+        if node.lock2.locked():
+            node.lock2.release()
     else:
         node.received_block = False
+        if node.lock2.locked():
+            node.lock2.release()
+        return "NOT OK", 201
         if not node.resolving_conflicts:
             node.resolving_conflicts = True
             if config.scalable:
