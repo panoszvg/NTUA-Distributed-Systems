@@ -342,7 +342,7 @@ class Node:
 		# copy UTXOs to pending_UTXOs
 		for utxo in self.UTXOs:
 			self.pending_UTXOs.append(copy.deepcopy(utxo))
-		time.sleep(1)
+		time.sleep(15) # because it takes forever for other nodes to start their Flask servers in okeanos VMs
 
 		data = { 
 			'ring': jsonpickle.encode(self.ring),
@@ -376,7 +376,6 @@ class Node:
 			)
 			valid_transaction = self.validate_transaction(transaction) # otherwise do manually
 			self.broadcast_transaction(transaction)
-			# self.broadcast_transaction(transaction)
 			if valid_transaction:
 				self.add_transaction_to_block(transaction)
 			else:
@@ -420,7 +419,6 @@ class Node:
 		sender_id = self.id
 		sender_wallet_NBCs = self.get_wallet_balance(sender_id, True)
 		if sender_wallet_NBCs < amount:
-			print("Error: insufficent balance")
 			return
 		recipient_id = next(item for item in self.ring if item["ip"] == receiver_ip and item["port"] == receiver_port)['id'] # max n iterations
 
@@ -589,13 +587,13 @@ class Node:
 				print("Block received at: " + str(time.time() - self.simulation_start_time) +" sec.")
 			else:
 				print("Block received at: " + str(time.time()))
-			print("New Balances:")
-			for i in range(0, config.nodes):
-				print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
-			print("Current chain (last 5):")
-			for block in self.chain.blocks[-5:]:
-				print(str(block.index) + ": " + str(block.current_hash))
-			print()
+			# print("New Balances:")
+			# for i in range(0, config.nodes):
+			# 	print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
+			# print("Current chain (last 5):")
+			# for block in self.chain.blocks[-5:]:
+			# 	print(str(block.index) + ": " + str(block.current_hash))
+			# print()
 
 	'''
 	Mines a block: searches for the right nonce, and when it
@@ -605,8 +603,8 @@ class Node:
 	return: None
 	'''
 	def mine_block(self):
-		# if DEBUG:
-		print("In mining")
+		if DEBUG:
+			print("In mining")
 		self.mining = True
 		nonce = randint(0, 2**64)
 		block = self.current_block
@@ -673,13 +671,13 @@ class Node:
 				print("Block mined at: " + str(time.time() - self.simulation_start_time) +" sec.")
 			else:
 				print("Block mined at: " + str(time.time()))
-			print("New Balances:")
-			for i in range(0, config.nodes):
-				print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
-			print("Current chain (last 5):")
-			for block in self.chain.blocks[-5:]:
-				print(str(block.index) + ": " + str(block.current_hash))
-			print()
+			# print("New Balances:")
+			# for i in range(0, config.nodes):
+			# 	print("Wallet: " + str(self.get_wallet_balance(i)) + " NBC")
+			# print("Current chain (last 5):")
+			# for block in self.chain.blocks[-5:]:
+			# 	print(str(block.index) + ": " + str(block.current_hash))
+			# print()
 
 		self.mining = False
 		if self.lock.locked():
@@ -900,30 +898,21 @@ class Node:
 	-----------
 	blocks: list of Block
 		blocks in chain to be undone
-	blocks_received: list of Block
-		blocks that are to be added in chain
 	'''
-	def undo_UTXOs(self, blocks, blocks_received):
+	def undo_UTXOs(self, blocks):
 		# add previous UTXO(s)
-		utxo_amount = 0
 		for block in reversed(blocks):
 			for transaction in reversed(block.transactions):
 				for txn_input in transaction.transaction_inputs:
-					print("++ " + str(txn_input.amount))
 					self.UTXOs[txn_input.owner].append(Transaction_Output(transaction.transaction_id, txn_input.owner, txn_input.amount))
-					utxo_amount += txn_input.amount
-		print("Added utxos: " + str(utxo_amount))
-		utxo_amount = 0
+		
 		# remove current UTXOs
 		for block in reversed(blocks):
 			for transaction in reversed(block.transactions):
 				for txn_output in transaction.transaction_outputs:
 					for x in self.UTXOs[txn_output.recipient]:
 						if x.id == txn_output.id:
-							print("-- " + str(x.amount))
-							utxo_amount += x.amount
 							self.UTXOs[txn_output.recipient].remove(x)
-		print("Removed utxos: " + str(utxo_amount))
 
 
 	'''
@@ -933,15 +922,16 @@ class Node:
 	correct blocks (and by performing the necessary transactions that exist in block).
 	'''
 	def resolve_conflicts(self):
-		print("In Resolving Conflicts with chain:")
-		for block in self.chain.blocks:
-			print(str(block.index) + ": " + str(block.current_hash))
-		print("And UTXOs:")
-		for i in range(0,config.nodes):
-			for utxo in self.pending_UTXOs[i]:
-				print(utxo.to_dict())
-		print()
-		#resolve correct chain
+		if DEBUG:
+			print("In Resolving Conflicts with chain:")
+			for block in self.chain.blocks:
+				print(str(block.index) + ": " + str(block.current_hash))
+			print("And UTXOs:")
+			for i in range(0,config.nodes):
+				for utxo in self.pending_UTXOs[i]:
+					print(utxo.to_dict())
+			print()
+
 		max_len = 0
 		max_info = None
 		for node in self.ring:
@@ -957,14 +947,14 @@ class Node:
 				max_info = req.json()
 
 		if max_len <= len(self.chain.blocks):
-			print("Exiting cause I'm right: " + str(max_len) + " <= " + str(len(self.chain.blocks)))
+			if DEBUG:
+				print("Exiting cause I'm right: " + str(max_len) + " <= " + str(len(self.chain.blocks)))
 			self.resolving_conflicts = False
 			return
 
-		print("RESOLVE : Before lock")
 		while not self.lock.acquire(blocking=False):
 			pass
-		print("RESOLVE : After lock")
+
 		self.current_block = jsonpickle.decode(max_info['current_block'])
 		incoming_chain = jsonpickle.decode(max_info['chain'])
 		
@@ -1003,7 +993,7 @@ class Node:
 			return
 
 		# undo UTXOs that exist in the wrong part of current chain
-		self.undo_UTXOS(self.chain.blocks[old_block_index+1:], incoming_chain.blocks[-blocks_to_add:])
+		self.undo_UTXOS(self.chain.blocks[old_block_index+1:])
 
 		# perform transactions that exist in the right part of incoming chain
 		for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
@@ -1022,14 +1012,15 @@ class Node:
 				if nonvalid_txn.transaction_id not in temp_block.transactions:
 					self.pending_transactions.appendleft(nonvalid_txn)
 
-		print("\nCurrent chain to keep:")
-		for block in self.chain.blocks[:old_block_index+1]:
-			print(str(block.index) + ": " + str(block.current_hash))
-		
-		print("\nIncoming chain to add:")
-		for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
-			print(str(incoming_block.index) + ": " + str(incoming_block.current_hash))
-		print("\n")
+		if DEBUG:
+			print("\nCurrent chain to keep:")
+			for block in self.chain.blocks[:old_block_index+1]:
+				print(str(block.index) + ": " + str(block.current_hash))
+			
+			print("\nIncoming chain to add:")
+			for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
+				print(str(incoming_block.index) + ": " + str(incoming_block.current_hash))
+			print("\n")
 
 		self.chain.blocks = self.chain.blocks[:old_block_index+1]
 		for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
@@ -1040,11 +1031,11 @@ class Node:
 		for utxo in self.UTXOs:
 			self.pending_UTXOs.append(copy.deepcopy(utxo))
 
-		print("\nCurrent chain")
-		for block in self.chain.blocks:
-			print(str(block.index) + ": " + str(block.current_hash))
+		if DEBUG:
+			print("\nCurrent chain")
+			for block in self.chain.blocks:
+				print(str(block.index) + ": " + str(block.current_hash))
 
 		if self.lock.locked():
 			self.lock.release()
 		self.resolving_conflicts = True
-		print("RESOLVE : released lock")
