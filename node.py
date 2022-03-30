@@ -87,6 +87,11 @@ class Node:
 	'''
 	def worker(self):
 		while True:
+			# wait until conflicts are resolved
+			while self.resolving_conflicts:
+				pass
+			# while there are no pending transactions, only perform
+			# changes if a correct block is received
 			while len(self.pending_transactions) == 0:
 				if self.received_block:
 					if DEBUG:
@@ -109,7 +114,6 @@ class Node:
 				pass
 			while not self.lock.acquire(blocking=False):
 				pass
-			# self.lock.acquire()
 			if DEBUG:
 				print("Acquired lock in worker")
 			if self.received_block:
@@ -126,21 +130,15 @@ class Node:
 			try:
 				transaction = self.pending_transactions.popleft()
 			except:
-				if DEBUG:
-					pass
-					# print("Failed")
 				if self.lock.locked():
 					self.lock.release()
 				continue
 
-			if transaction == None or self.transaction_exists(transaction):
-				if self.lock.locked():
-					self.lock.release()
-				continue
-
+			# if transaction is created by current node 'recreate' it
 			if transaction.sender_address == self.wallet.public_key:
 				transaction = self.recreate_node_transaction(transaction)
 			
+			# if transaction already exists in chain, it's duplicate, do nothing
 			if transaction == None or self.transaction_exists(transaction):
 				if self.lock.locked():
 					self.lock.release()
@@ -152,6 +150,7 @@ class Node:
 				pass
 			valid_transaction = self.validate_transaction(transaction)
 			if valid_transaction:
+				# if transaction is correct and by current node, also broadcast
 				if transaction.sender_address == self.wallet.public_key:
 					self.broadcast_transaction(transaction)
 				if DEBUG:
@@ -477,9 +476,7 @@ class Node:
 		whether transaction is valid or not
 	'''
 	def validate_transaction(self, transaction):
-		# use of signature and NBCs balance
 		verified = transaction.verify_signature()
-		############## also check for sufficient balance
 		if verified:
 			# find id of sender
 			temp = None
@@ -617,6 +614,8 @@ class Node:
 			block.previous_hash = self.chain.blocks[-1].current_hash
 		block.index = len(self.chain.blocks)
 		while (True):
+			if self.resolve_conflicts:
+				return
 			if self.received_block:
 				self.process_block_received()
 				self.received_block = False
@@ -893,8 +892,18 @@ class Node:
 
 
 	'''
-	@deprecated - [buggy]
-	Function to undo correct UTXOs that have been added to chain but ultimately are in wrong branch of chain.
+	Function to undo 'correct' UTXOs that have been added to chain but ultimately are in wrong branch of chain.
+	Basiscally, undo all transactions (going backwards) by re-creating all the UTXOs that are inputs and remove
+	all the UTXOs that are outputs (since when adding them the reverse happens; inputs are removed and outputs are added).
+	After undoing the transactions in the wrong blocks, add back to pending_transactions the transactions that are
+	made by current node but do not exists in incoming blocks to be added.  
+
+	Parameters:
+	-----------
+	blocks: list of Block
+		blocks in chain to be undone
+	blocks_received: list of Block
+		blocks that are to be added in chain
 	'''
 	def undo_UTXOs(self, blocks, blocks_received):
 		# add previous UTXO(s)
@@ -918,7 +927,8 @@ class Node:
 							self.UTXOs[txn_output.recipient].remove(x)
 		print("Removed utxos: " + str(utxo_amount))
 
-		# recreate transactions
+		# recreate transactions - basically reinsert_transactions, but also 
+		# written here since it involves multiple blocks both in undoing and checking
 		for block in blocks:
 			for transaction in block.transactions:
 				flag = False
@@ -949,10 +959,10 @@ class Node:
 
 
 	'''
-	[buggy]
 	Function that resolves conflicts if a block is received that is not valid. It asks other nodes for
-	their chain length and if they have a chain longer than its own, ask the node with the longer chain for
-	the chain and other info to bring this node up-to-date with correct branch.
+	their chain and if they have a chain longer than its own, it brings this node up-to-date with correct branch
+	by removing the blocks that are in the wrong branch (and undoing respective transactions) and adding the 
+	correct blocks (and by performing the necessary transactions that exist in block).
 	'''
 	def resolve_conflicts(self):
 		print("In Resolving Conflicts with chain:")
@@ -980,23 +990,15 @@ class Node:
 
 		if max_len <= len(self.chain.blocks):
 			print("Exiting cause I'm right: " + str(max_len) + " <= " + str(len(self.chain.blocks)))
-			self.resolving_conflicts = True
+			self.resolving_conflicts = False
 			return
 
 		print("RESOLVE : Before lock")
-		# while not self.lock.acquire(blocking=False):
-		# 	pass
+		while not self.lock.acquire(blocking=False):
+			pass
 		print("RESOLVE : After lock")
-		# self.chain = jsonpickle.decode(max_info['chain'])
 		self.current_block = jsonpickle.decode(max_info['current_block'])
 		incoming_chain = jsonpickle.decode(max_info['chain'])
-		# if self.validate_chain(incoming_chain):
-		# 	pass
-		# else:
-		# 	print("CHAIN RECEIVED IS NOT VALID")
-		# 	if self.lock.locked():
-		# 		self.lock.release()
-		# 	return
 		
 		# decide how many current blocks to revert
 		blocks_to_add = 0
@@ -1032,23 +1034,12 @@ class Node:
 			self.resolving_conflicts = True
 			return
 
-		# self.undo_UTXOS(self.chain.blocks[old_block_index+1:], incoming_chain.blocks[-blocks_to_add:])
+		# undo UTXOs that exist in the wrong part of current chain
+		self.undo_UTXOS(self.chain.blocks[old_block_index+1:], incoming_chain.blocks[-blocks_to_add:])
 
-		# for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
-		# 	self.add_UTXOS(incoming_block)
-
-		temp_block = copy.deepcopy(incoming_chain.blocks[-blocks_to_add])
-		for incoming_block in incoming_chain.blocks[-blocks_to_add+1:]:
-			for incoming_txn in incoming_block.transactions:
-				temp_block.transactions.append(incoming_txn)
-
-		for nonvalid_block in self.chain.blocks[old_block_index+1:]:
-			for nonvalid_txn in nonvalid_block.transactions:
-				if nonvalid_txn.transaction_id not in temp_block.transactions:
-					self.pending_transactions.appendleft(nonvalid_txn)
-				
-
-		self.UTXOs = jsonpickle.decode(max_info['UTXOs'])
+		# perform transactions that exist in the right part of incoming chain
+		for incoming_block in incoming_chain.blocks[-blocks_to_add:]:
+			self.add_UTXOS(incoming_block)
 
 		print("\nCurrent chain to keep:")
 		for block in self.chain.blocks[:old_block_index+1]:
@@ -1076,58 +1067,3 @@ class Node:
 			self.lock.release()
 		self.resolving_conflicts = True
 		print("RESOLVE : released lock")
-
-
-	'''
-	[buggy]
-	This function resolves conflicts for scalable systems, since it first finds the node
-	with max chain length, finds out which blocks it needs from it and requests that number
-	of blocks from that node, to replace its own.
-	'''
-	def resolve_conflicts_scalable(self):
-		#resolve correct chain
-		max_len = 0
-		max_info = None
-		max_id = -1
-		# find node with max chain length
-		for node in self.ring:
-			if node['id'] == self.id:
-				continue
-			url = "http://" + node['ip'] + ":" + str(node['port']) + "/chain/length"
-			req = requests.get(url)
-			if (not req.status_code == 200):
-				print("Status code not 200")
-				exit(1)
-			if jsonpickle.decode(req.json()['length']) > max_len:
-				max_id = node['id']
-				max_len = jsonpickle.decode(req.json()['length'])
-				max_info = jsonpickle.decode(req.json()['chain'])
-
-		# find how many blocks to request
-		request_length = 1
-		for block in reversed(self.chain.blocks):
-			pass
-			if block.current_hash in max_info:
-				break
-			else:
-				request_length += 1
-
-		# request the last @request_length blocks from node with max chain length
-		url = "http://" + self.ring[max_id]['ip'] + ":" + str(self.ring[max_id]['port']) + "/chain/get/" + str(request_length)
-		req = requests.get(url)
-		if (not req.status_code == 200):
-			print("Status code not 200")
-			exit(1)
-		new_blocks = jsonpickle.decode(req.json()['blocks'])
-
-		# replace last @request_length blocks of chain with blocks from node with max chain length
-		while not self.lock.acquire(blocking=False):
-			pass
-		for i in range(0, request_length):
-			self.chain.blocks.pop()
-		for new_block in new_blocks:
-			self.chain.blocks.append(new_block)
-		self.current_block = jsonpickle.decode(req.json()['current_block'])
-
-		if self.lock.locked():
-			self.lock.release()

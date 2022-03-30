@@ -184,9 +184,9 @@ def add_block():
             for t_output in transaction.transaction_outputs:
                 print("\tOutput: { Recipient: " + str(t_output.recipient) + ", Amount: " + str(t_output.amount) + " }")
         print()
-    print("Incoming block with hash: " + str(block_received.current_hash))
-    print("Prev: " + str(block_received.previous_hash))
-    print("Curr: " + str(node.chain.blocks[-1].current_hash))
+        print("Incoming block with hash: " + str(block_received.current_hash))
+        print("Prev: " + str(block_received.previous_hash))
+        print("Curr: " + str(node.chain.blocks[-1].current_hash))
     while node.received_block:
         pass
     node.received_block = True
@@ -197,11 +197,7 @@ def add_block():
         node.received_block = False
         if not node.resolving_conflicts:
             node.resolving_conflicts = True
-            if config.scalable:
-                _thread.start_new_thread(node.resolve_conflicts_scalable, ())
-            else:
-                _thread.start_new_thread(node.resolve_conflicts, ())
-                # node.resolve_conflicts()
+            _thread.start_new_thread(node.resolve_conflicts, ())
     return "OK", 200
 
 
@@ -225,8 +221,9 @@ def get_transactions():
     return jsonify(response), 200
 
 
-
-
+'''
+Get balance of current node [unused by client, can be used in Postman]
+'''
 @rest.route('/balance', methods=['GET'])
 def balance():
     balance = node.get_wallet_balance()
@@ -240,32 +237,6 @@ Endpoint used when resolving conflicts, give chain (and other info) to update no
 def get_chain():
     response = {
         'chain': jsonpickle.encode(copy.deepcopy(node.chain)),
-        'current_block': jsonpickle.encode(node.current_block),
-        'UTXOs': jsonpickle.encode(node.UTXOs)
-    }
-    return jsonify(response), 200
-
-'''
-Endpoint used when resolving conflicts (optimised), give chain length and hashes
-'''
-@rest.route('/chain/length', methods=['GET'])
-def get_chain_length():
-    chain_hashes = []
-    for block in node.chain.blocks:
-        chain_hashes.append(block.current_hash)
-    response = {
-        'chain': jsonpickle.encode(copy.deepcopy(chain_hashes)),
-        'length': jsonpickle.encode(len(node.chain.blocks))
-    }
-    return jsonify(response)
-
-'''
-Endpoint used when resolving conflicts, give chain (and other info) to update node that asks for it
-'''
-@rest.route('/chain/get/<blocks>', methods=['GET'])
-def get_chain_last(blocks):
-    response = {
-        'blocks': jsonpickle.encode(copy.deepcopy(node.chain.blocks[-int(blocks):])),
         'current_block': jsonpickle.encode(node.current_block),
         'UTXOs': jsonpickle.encode(node.UTXOs)
     }
