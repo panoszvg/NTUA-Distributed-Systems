@@ -1,4 +1,3 @@
-# from Crypto.PublicKey import RSA
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
@@ -9,13 +8,6 @@ class Wallet:
 	Initialize a Wallet object that belongs to a Node in the network
 	'''
 	def __init__(self):
-		# rand_gen = RSA.generate(2048)
-		# self.public_key = rand_gen.publickey().exportKey().decode() 
-		# self.private_key = rand_gen.exportKey().decode() 
-		#self_address
-		# self.transactions = []
-
-		#########################
 		private_key = rsa.generate_private_key(
 			public_exponent=65537,
 			key_size=4096,
@@ -35,6 +27,3 @@ class Wallet:
 		)
 
 		self.transactions = []
-
-	# def balance():
-

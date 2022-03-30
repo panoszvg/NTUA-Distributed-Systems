@@ -1,7 +1,7 @@
 nodes=5
-capacity=3
+capacity=10
 difficulty=4
-simulation=True
+simulation=False
 scalable=False
 bootstrap_ip = '127.0.0.1'
 DEBUG=False

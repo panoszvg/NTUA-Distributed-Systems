@@ -36,13 +36,18 @@ def receive_ring():
     for utxo in node.UTXOs:
         node.pending_UTXOs.append(copy.deepcopy(utxo))
     node.current_id_count = len(node.UTXOs)
-    node.begin_simulation = True
+    # node.begin_working = True
     if config.simulation:
         _thread.start_new_thread(simulation, ())
     else:
         _thread.start_new_thread(client, ())
     return "OK", 200
 
+
+@app.route('/begin', methods=['POST'])
+def begin():
+    node.begin_working = True
+    return "OK", 200
 
 
 # run it once for every node

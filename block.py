@@ -1,7 +1,6 @@
 
 import json
-from Crypto.Hash import SHA512
-import jsonpickle
+from Crypto.Hash import SHA256
 
 class Block:
 	'''
@@ -25,7 +24,7 @@ class Block:
 			nonce = self.nonce,
 			previous_hash = self.previous_hash
 		))
-		return SHA512.new(block_info.encode()).hexdigest()
+		return SHA256.new(block_info.encode()).hexdigest()
 
 	'''
 	Add a transaction to the block:

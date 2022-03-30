@@ -1,7 +1,4 @@
-from re import L
 from flask import Blueprint, jsonify, request
-from numpy import block
-from block import Block
 from node import Node
 from blockchain import Blockchain
 from config import DEBUG, bootstrap_ip
@@ -23,10 +20,7 @@ def client():
         cli_input = input()
         if cli_input[0:2] == "t ":
             print("New transaction requested")
-            if node.mining:
-                print("Not accepting transactions at the moment because of mining process, try again later.\n")
-                continue
-            
+
             # split string to arguments
             cli_input = cli_input[2:].split()
             if len(cli_input) != 2:
@@ -53,30 +47,32 @@ def client():
                 continue
             amount = int(cli_input[1])
 
+            while node.lock.acquire(blocking=False):
+                pass
+
             # validate amount
             temp = node.get_transaction_inputs(amount)
             if temp == None:
                 print("Wallet doesn't have sufficient funds to make this transaction")
                 print("Wallet: " + str(node.get_wallet_balance(node.id)) + " NBC")
                 print()
+                if node.lock.locked():
+                    node.lock.release()
                 continue
 
             inputs, inputs_sum = temp
 
             # create transaction
             new_transaction = node.create_transaction(
-                sender_ip=node.ip,
-                sender_port=node.port,
                 receiver_ip=recipient_address.split(":")[0],
                 receiver_port=int(recipient_address.split(":")[1]),
                 amount=amount,
                 inputs=inputs,
                 inputs_sum=inputs_sum
             )
-            valid_transaction = node.validate_transaction(new_transaction)
-            if valid_transaction:
-                node.broadcast_transaction(new_transaction)
-                node.add_transaction_to_block(new_transaction)
+            node.pending_transactions.append(new_transaction)
+            if node.lock.locked():
+                node.lock.release()
             print()
 
         elif cli_input == "view":
@@ -111,26 +107,11 @@ def client():
 
 
 def simulation():
-    while node.current_id_count != config.nodes:
+    while not node.begin_working:
         pass
 
-    while not node.begin_simulation:
-        pass
-
-    while not (node.get_wallet_balance(0) != 0 \
-    and node.get_wallet_balance(1) != 0 \
-    and node.get_wallet_balance(2) != 0 \
-    and node.get_wallet_balance(3) != 0 \
-    and node.get_wallet_balance(4) != 0):
-        pass
-
-    if DEBUG:
-        print("All wallets have 100 NBCs")
-        print(str(node.get_wallet_balance(0, True)) + " " + str(node.get_wallet_balance(1, True)) + " " + str(node.get_wallet_balance(2, True)) + " " + str(node.get_wallet_balance(3, True)) + " " + str(node.get_wallet_balance(4, True)))
-
-    timestamp_1 = time.time()
-    node.simulation_start_time = timestamp_1
-    file = open("./" + str(config.nodes) + "nodes/transactions" + str(node.id) + ".txt", "r")
+    node.simulation_start_time = time.time()
+    file = open("transactions/" + str(config.nodes) + "nodes/transactions" + str(node.id) + ".txt", "r")
     for line in file:
         if node.mining:
             if DEBUG:
@@ -146,15 +127,9 @@ def simulation():
             print("amount: " + str(amount))
             print()
             print("Before acquiring lock in simulation")
-			
-        # while not((node.old_valid_txns == 0) and (node.lock.acquire(blocking=False))):
-        #     pass
 
         while not((len(node.pending_transactions) < config.capacity) and (node.lock.acquire(blocking=False))):
             pass
-
-        if DEBUG:
-            print("Old valid size is: " + str(node.old_valid_txns))
 
         if DEBUG:
             print("Acquired lock in simulation")
@@ -172,32 +147,16 @@ def simulation():
 
         # create transaction
         new_transaction = node.create_transaction(
-            sender_ip=node.ip,
-            sender_port=node.port,
             receiver_ip=str(node.ring[id]['ip']),
             receiver_port=node.ring[id]['port'],
             amount=amount,
             inputs=inputs,
             inputs_sum=inputs_sum
         )
-        # while node.mining:
-        #     pass
         node.pending_transactions.append(new_transaction)
-        # valid_transaction = node.validate_transaction(new_transaction)
-        # if valid_transaction:
-        #     if DEBUG:
-        #         print("Sim-Valid txn")
-        #     node.broadcast_transaction(new_transaction)
-        #     node.add_transaction_to_block(new_transaction)
-            # print("Valid txn and pending txns size is: " + str(len(node.pending_transactions)))
-            # node.pending_transactions.append(new_transaction)
-            # print("After appending: " + str(len(node.pending_transactions)))
-            # _thread.start_new_thread(node.worker, ())
+
         if node.lock.locked():
             node.lock.release()
-    print("Simulation is done")
-    timestamp_2 = time.time()
-    print("Time spent in simulation: " + str(timestamp_2 - timestamp_1) + " sec.")
     client()
 
 
@@ -225,19 +184,24 @@ def add_block():
             for t_output in transaction.transaction_outputs:
                 print("\tOutput: { Recipient: " + str(t_output.recipient) + ", Amount: " + str(t_output.amount) + " }")
         print()
-    while node.block_received:
+    print("Incoming block with hash: " + str(block_received.current_hash))
+    print("Prev: " + str(block_received.previous_hash))
+    print("Curr: " + str(node.chain.blocks[-1].current_hash))
+    while node.received_block:
         pass
+    node.received_block = True
     correct_block = node.validate_block(block_received)
     if correct_block:
-        node.received_block = block_received
-        node.received_UTXOs = jsonpickle.decode(request.json['UTXOs'])
-        node.block_received = True
+        node.block_received = block_received
     else:
-        if config.scalable:
-            _thread.start_new_thread(node.resolve_conflicts_scalable, ())
-        else:
-            _thread.start_new_thread(node.resolve_conflicts, ())
-            # node.resolve_conflicts()
+        node.received_block = False
+        if not node.resolving_conflicts:
+            node.resolving_conflicts = True
+            if config.scalable:
+                _thread.start_new_thread(node.resolve_conflicts_scalable, ())
+            else:
+                _thread.start_new_thread(node.resolve_conflicts, ())
+                # node.resolve_conflicts()
     return "OK", 200
 
 
@@ -276,7 +240,8 @@ Endpoint used when resolving conflicts, give chain (and other info) to update no
 def get_chain():
     response = {
         'chain': jsonpickle.encode(copy.deepcopy(node.chain)),
-        'current_block': jsonpickle.encode(node.current_block)
+        'current_block': jsonpickle.encode(node.current_block),
+        'UTXOs': jsonpickle.encode(node.UTXOs)
     }
     return jsonify(response), 200
 
@@ -302,6 +267,6 @@ def get_chain_last(blocks):
     response = {
         'blocks': jsonpickle.encode(copy.deepcopy(node.chain.blocks[-int(blocks):])),
         'current_block': jsonpickle.encode(node.current_block),
-        'UTXOs': jsonpickle.decode(node.UTXOs)
+        'UTXOs': jsonpickle.encode(node.UTXOs)
     }
     return jsonify(response), 200
