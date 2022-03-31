@@ -61,7 +61,6 @@ if __name__ == '__main__':
     port = args.port
     node.port = port
     ipv4 = os.popen('ip addr show eth1 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
-    ipv4 = config.bootstrap_ip
     data = {
         'ip': ipv4,
         'port': port,
