@@ -237,7 +237,6 @@ Endpoint used when resolving conflicts, give chain (and other info) to update no
 def get_chain():
     response = {
         'chain': jsonpickle.encode(copy.deepcopy(node.chain)),
-        'current_block': jsonpickle.encode(node.current_block),
-        'UTXOs': jsonpickle.encode(node.UTXOs)
+        'current_block': jsonpickle.encode(node.current_block)
     }
     return jsonify(response), 200

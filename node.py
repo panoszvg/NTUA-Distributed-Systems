@@ -336,7 +336,7 @@ class Node:
 	created and added to ring variable. This method broadcasts ring to the other nodes and creates initial
 	transactions to give other nodes their first 100 NBC.
 
-	return: Node
+	return: None
 	'''
 	def initialize_nodes(self):
 		# copy UTXOs to pending_UTXOs
@@ -348,7 +348,8 @@ class Node:
 			'ring': jsonpickle.encode(self.ring),
 			'current_block': jsonpickle.encode(self.current_block),
 			'chain': jsonpickle.encode(self.chain),
-			'UTXOs': jsonpickle.encode(self.UTXOs) }
+			'UTXOs': jsonpickle.encode(self.UTXOs)
+			}
 
 		for node in self.ring:
 			if node['id'] == self.id:
@@ -612,7 +613,7 @@ class Node:
 			block.previous_hash = self.chain.blocks[-1].current_hash
 		block.index = len(self.chain.blocks)
 		while (True):
-			if self.resolve_conflicts:
+			if self.resolving_conflicts:
 				return
 			if self.received_block:
 				self.process_block_received()
@@ -962,21 +963,23 @@ class Node:
 		blocks_to_add = 0
 		old_block_index = None
 
-		print("\nCurrent chain:")
-		for block in self.chain.blocks:
-			print(str(block.index) + ": " + str(block.current_hash))
-		print("\nIncoming chain:")
-		for incoming_block in incoming_chain.blocks:
-			print(str(incoming_block.index) + ": " + str(incoming_block.current_hash))
-		print("\n")
+		if DEBUG:
+			print("\nCurrent chain:")
+			for block in self.chain.blocks:
+				print(str(block.index) + ": " + str(block.current_hash))
+			print("\nIncoming chain:")
+			for incoming_block in incoming_chain.blocks:
+				print(str(incoming_block.index) + ": " + str(incoming_block.current_hash))
+			print("\n")
 
 		flag = False
 		for incoming_block in reversed(incoming_chain.blocks):
 			for block in reversed(self.chain.blocks):
 				if incoming_block.current_hash == block.current_hash:
-					print("Found adding blocks to be " + str(blocks_to_add) + " - breaking")
 					old_block_index = self.chain.blocks.index(block)
-					print("Found index to be " + str(old_block_index) + "       - breaking")
+					if DEBUG:
+						print("Found adding blocks to be " + str(blocks_to_add) + " - breaking")
+						print("Found index to be " + str(old_block_index) + "       - breaking")
 					flag = True
 					break
 			if flag:
@@ -984,7 +987,8 @@ class Node:
 			blocks_to_add += 1
 
 		if blocks_to_add == 0:
-			print("Exiting cause I got no changes to do")
+			if DEBUG:
+				print("Exiting cause I got no changes to do")
 			self.block_received = None
 			self.received_block = False
 			if self.lock.locked():
