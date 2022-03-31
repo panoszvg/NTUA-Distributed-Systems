@@ -62,6 +62,9 @@ def client():
                     node.lock.release()
                 continue
 
+            if node.mining:
+                print("\nNow mining, will process later.")
+
             inputs, inputs_sum = temp
 
             # create transaction
