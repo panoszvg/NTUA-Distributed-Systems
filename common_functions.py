@@ -14,6 +14,8 @@ blockchain = Blockchain(config.capacity)
 #.......................................................................................
 
 def client():
+    while not node.begin_working:
+        pass
     print("\n        NBC Client        \n")
     while(True):        
         print(">", end=" ")
